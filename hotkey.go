@@ -9,6 +9,10 @@ import (
 
 var (
 	snippetHotkeys [10]*hotkey.Hotkey // Cmd+Option+0 through Cmd+Option+9
+
+	snippetInput   string      // Accumulated digit input (e.g., "1", "15")
+	snippetTimeout *time.Timer // Timeout for multi-digit input
+	inputTimeout   = 1 * time.Second
 )
 
 // InitHotkeys initializes global hotkey support
@@ -24,18 +28,20 @@ func initHotkeysAsync() {
 	// Get platform-specific modifiers
 	mods, hotkeyDesc := getSnippetHotkeyModifiers()
 
-	// Register Cmd+Option+0 through Cmd+Option+9 (or Ctrl+Alt+0-9 on Windows/Linux)
+	// Register Cmd+Option+0 through Cmd+Option+9
+	// For multi-digit snippets (e.g., 12), user presses Cmd+Option+1, then Cmd+Option+2
 	keys := []hotkey.Key{
 		hotkey.Key0, hotkey.Key1, hotkey.Key2, hotkey.Key3, hotkey.Key4,
 		hotkey.Key5, hotkey.Key6, hotkey.Key7, hotkey.Key8, hotkey.Key9,
 	}
 
 	registeredCount := 0
-	var errors []string
 	for i, key := range keys {
 		hk := hotkey.New(mods, key)
 		if err := hk.Register(); err != nil {
-			errors = append(errors, fmt.Sprintf("%d: %v", i, err))
+			if debugMode {
+				fmt.Printf("Failed to register hotkey %s+%d: %v\n", hotkeyDesc, i, err)
+			}
 			continue
 		}
 		snippetHotkeys[i] = hk
@@ -44,25 +50,59 @@ func initHotkeysAsync() {
 		// Start listener for this hotkey
 		go func(num int, h *hotkey.Hotkey) {
 			for range h.Keydown() {
-				copySnippetByIndex(num)
+				handleSnippetDigit(num)
 			}
 		}(i, hk)
 	}
 
-	// Always show registration result in status
 	if registeredCount > 0 {
-		mStatus.SetTitle(fmt.Sprintf("Hotkeys ready: %s+[0-9]", hotkeyDesc))
-	} else if len(errors) > 0 {
-		mStatus.SetTitle(fmt.Sprintf("Hotkey error: %s", errors[0]))
-		fmt.Printf("Hotkey registration errors: %v\n", errors)
+		mStatus.SetTitle(fmt.Sprintf("Hotkey: %s+[0-9]", hotkeyDesc))
 	}
 
 	if debugMode {
 		fmt.Printf("Registered %d snippet hotkeys (%s+0 through %s+9)\n", registeredCount, hotkeyDesc, hotkeyDesc)
-		if len(errors) > 0 {
-			fmt.Printf("Errors: %v\n", errors)
-		}
 	}
+}
+
+// handleSnippetDigit handles Cmd+Option+N presses and accumulates digits
+func handleSnippetDigit(num int) {
+	stateMutex.Lock()
+	snippetInput += fmt.Sprintf("%d", num)
+	currentInput := snippetInput
+	stateMutex.Unlock()
+
+	// Update status to show current input
+	mStatus.SetTitle(fmt.Sprintf("Snippet #%s...", currentInput))
+
+	// Reset/start timeout - after 1 second of no more digits, select the snippet
+	if snippetTimeout != nil {
+		snippetTimeout.Stop()
+	}
+	snippetTimeout = time.AfterFunc(inputTimeout, finalizeSnippetSelection)
+}
+
+func finalizeSnippetSelection() {
+	stateMutex.Lock()
+	input := snippetInput
+	snippetInput = "" // Reset for next time
+	stateMutex.Unlock()
+
+	if input != "" {
+		selectSnippetByInput(input)
+	}
+}
+
+func selectSnippetByInput(input string) {
+	if input == "" {
+		mStatus.SetTitle("No snippet number entered")
+		return
+	}
+
+	// Parse the number
+	var num int
+	fmt.Sscanf(input, "%d", &num)
+
+	copySnippetByIndex(num)
 }
 
 func copySnippetByIndex(num int) {

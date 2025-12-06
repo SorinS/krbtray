@@ -257,20 +257,78 @@ func loadAndBuildSnippetsMenu() {
 	// Clear existing submenu items tracking
 	snippetMenuItems = make([]*systray.MenuItem, 0, len(appConfig.Snippets))
 
-	// Add each snippet as a submenu item
-	for _, entry := range appConfig.Snippets {
-		// Display format: "[index] name" with value preview as tooltip
-		displayName := fmt.Sprintf("[%d] %s", entry.Index, entry.Name)
-		tooltip := entry.Value
-		if len(tooltip) > 50 {
-			tooltip = tooltip[:50] + "..."
-		}
-		item := mSnippetsMenu.AddSubMenuItem(displayName, tooltip)
-		snippetMenuItems = append(snippetMenuItems, item)
+	// Group snippets by index ranges (1-10, 11-20, etc.)
+	const groupSize = 10
 
-		// Start a goroutine to handle clicks for this snippet
-		go handleSnippetClick(item, entry)
+	// Find max index to determine number of groups needed
+	maxIndex := 0
+	for _, entry := range appConfig.Snippets {
+		if entry.Index > maxIndex {
+			maxIndex = entry.Index
+		}
 	}
+
+	// If 10 or fewer snippets, don't group - just list them directly
+	if len(appConfig.Snippets) <= groupSize {
+		for _, entry := range appConfig.Snippets {
+			addSnippetMenuItem(mSnippetsMenu, entry)
+		}
+		return
+	}
+
+	// Create groups based on index ranges
+	numGroups := (maxIndex / groupSize) + 1
+	groups := make(map[int][]SnippetEntry)
+
+	for _, entry := range appConfig.Snippets {
+		groupNum := entry.Index / groupSize
+		groups[groupNum] = append(groups[groupNum], entry)
+	}
+
+	// Create submenus for each group that has snippets
+	for g := 0; g < numGroups; g++ {
+		snippets, exists := groups[g]
+		if !exists || len(snippets) == 0 {
+			continue
+		}
+
+		// Calculate range for this group
+		startIdx := g * groupSize
+		endIdx := startIdx + groupSize - 1
+		if g == 0 {
+			startIdx = 0 // First group is 0-9
+		}
+
+		groupLabel := fmt.Sprintf("Snippets %d-%d", startIdx, endIdx)
+		groupMenu := mSnippetsMenu.AddSubMenuItem(groupLabel, "")
+
+		// Add snippets in this group
+		for _, entry := range snippets {
+			addSnippetSubMenuItem(groupMenu, entry)
+		}
+	}
+}
+
+func addSnippetMenuItem(parent *systray.MenuItem, entry SnippetEntry) {
+	displayName := fmt.Sprintf("[%d] %s", entry.Index, entry.Name)
+	tooltip := entry.Value
+	if len(tooltip) > 50 {
+		tooltip = tooltip[:50] + "..."
+	}
+	item := parent.AddSubMenuItem(displayName, tooltip)
+	snippetMenuItems = append(snippetMenuItems, item)
+	go handleSnippetClick(item, entry)
+}
+
+func addSnippetSubMenuItem(parent *systray.MenuItem, entry SnippetEntry) {
+	displayName := fmt.Sprintf("[%d] %s", entry.Index, entry.Name)
+	tooltip := entry.Value
+	if len(tooltip) > 50 {
+		tooltip = tooltip[:50] + "..."
+	}
+	item := parent.AddSubMenuItem(displayName, tooltip)
+	snippetMenuItems = append(snippetMenuItems, item)
+	go handleSnippetClick(item, entry)
 }
 
 func handleSnippetClick(item *systray.MenuItem, entry SnippetEntry) {
