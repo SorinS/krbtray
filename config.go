@@ -29,12 +29,12 @@ type URLEntry struct {
 
 // SecretEntry represents a CSM secret configuration
 type SecretEntry struct {
-	Name       string `json:"name"`        // Display name in menu
-	AuthURL    string `json:"auth_url"`    // Authentication URL
-	RoleName   string `json:"role_name"`   // Role name
-	RoleType   string `json:"role_type"`   // Role type
-	RotateURL  string `json:"rotate_url"`  // Rotate URL
-	SecretURL  string `json:"secret_url"`  // Secret URL
+	Name      string `json:"name"`       // Display name in menu
+	AuthURL   string `json:"auth_url"`   // Authentication URL
+	RoleName  string `json:"role_name"`  // Role name
+	RoleType  string `json:"role_type"`  // Role type
+	RotateURL string `json:"rotate_url"` // Rotate URL
+	SecretURL string `json:"secret_url"` // Secret URL
 }
 
 // SPNEntry represents a single SPN configuration

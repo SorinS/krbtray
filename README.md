@@ -80,9 +80,47 @@ CGO_ENABLED=1 go build -o krb5tray .
 | `KRB5CCNAME` | Path to credential cache file | Linux |
 | `KRB5_CONFIG` | Path to krb5.conf (default: `/etc/krb5.conf`) | Linux |
 
-### Setting the SPN
+### Configuration File
 
-Before running, set the target SPN:
+krb5tray uses a JSON configuration file located at `~/.config/krb5tray.json`. The file supports the following sections:
+
+```json
+{
+  "spns": [
+    {"name": "Production API", "spn": "HTTP/api.example.com@REALM.COM"},
+    {"name": "Staging API", "spn": "HTTP/api-staging.example.com@REALM.COM"}
+  ],
+  "secrets": [
+    {
+      "name": "Database Credentials",
+      "auth_url": "https://vault.example.com/auth",
+      "role_name": "db-reader",
+      "role_type": "approle",
+      "rotate_url": "https://vault.example.com/rotate",
+      "secret_url": "https://vault.example.com/secret"
+    }
+  ],
+  "urls": [
+    {"name": "Jira", "url": "https://jira.example.com"},
+    {"name": "Confluence", "url": "https://confluence.example.com"}
+  ],
+  "snippets": [
+    {"index": 1, "name": "Bearer Token", "value": "Bearer abc123..."},
+    {"index": 2, "name": "API Key", "value": "x-api-key: secret123"}
+  ]
+}
+```
+
+| Section | Description |
+|---------|-------------|
+| `spns` | Service Principal Names for Kerberos tickets |
+| `secrets` | CSM secret configurations |
+| `urls` | URL bookmarks that open in browser |
+| `snippets` | Text snippets copied to clipboard (use `index` 0-9 for hotkey access) |
+
+### Setting the SPN (Alternative)
+
+You can also set a default SPN via environment variable:
 
 ```bash
 # macOS/Linux
@@ -125,12 +163,45 @@ $env:KRB5_SPN = "HTTP/server.example.com"
 | Menu Item | Description |
 |-----------|-------------|
 | Status line | Shows current platform, ticket status, or errors |
-| SPN: ... | Displays current SPN (click to update from environment) |
-| Get Ticket | Request/refresh the service ticket |
+| Select SPN | Submenu to choose a service principal from config |
+| CSM Secrets | Submenu to manage CSM secrets |
+| URLs | Submenu to open configured URLs in browser |
+| Snippets | Submenu to copy text snippets to clipboard |
+| Refresh Ticket | Request/refresh the service ticket for current SPN |
 | Copy HTTP Header | Copy `Negotiate <base64-token>` to clipboard |
 | Copy Token | Copy raw base64 token to clipboard |
 | Debug Mode | Toggle verbose debug output |
+| Reload Config | Reload configuration from file |
+| About | Shows version, commit, and build date |
 | Quit | Exit the application |
+
+## Global Hotkeys
+
+krb5tray supports global hotkeys for quick access to frequently-used snippets. Snippets with an `index` field (0-9) can be copied directly without opening the menu:
+
+| Platform | Hotkey | Action |
+|----------|--------|--------|
+| macOS | `Cmd+Option+[0-9]` | Copy snippet with matching index |
+| Windows | `Ctrl+Alt+[0-9]` | Copy snippet with matching index |
+| Linux | `Ctrl+Alt+[0-9]` | Copy snippet with matching index |
+
+**Hybrid approach:**
+- **Quick access (hotkeys):** Assign `index` values 0-9 to your most frequently used snippets for instant hotkey access
+- **Full list (menu):** Click the tray icon → Snippets to see and select from all configured snippets
+
+**Example config:**
+```json
+{
+  "snippets": [
+    {"index": 1, "name": "API Token", "value": "Bearer abc123"},
+    {"index": 2, "name": "SSH Key", "value": "ssh-rsa AAAA..."},
+    {"name": "Rarely used snippet", "value": "..."}
+  ]
+}
+```
+The first two snippets are accessible via `Cmd+Option+1` and `Cmd+Option+2`. The third snippet (no index) is only available through the menu.
+
+**Note:** On macOS, the terminal running the binary needs Accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add Terminal.app (or your terminal of choice).
 
 ## Example Workflow
 

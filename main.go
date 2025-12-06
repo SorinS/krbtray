@@ -128,6 +128,9 @@ func onReady() {
 
 	// Show platform info in status
 	updatePlatformStatus()
+
+	// Initialize global hotkeys for snippet selection
+	InitHotkeys()
 }
 
 func loadAndBuildSPNMenu() {
@@ -281,7 +284,8 @@ func handleSnippetClick(item *systray.MenuItem, entry SnippetEntry) {
 }
 
 func onExit() {
-	// Cleanup
+	// Cleanup hotkeys
+	CleanupHotkeys()
 }
 
 func handleMenuClicks() {

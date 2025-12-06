@@ -87,6 +87,10 @@ github.com/oxtoacart/bpool
 # github.com/patrickmn/go-cache v2.1.0+incompatible
 ## explicit
 github.com/patrickmn/go-cache
+# golang.design/x/hotkey v0.4.1
+## explicit; go 1.17
+golang.design/x/hotkey
+golang.design/x/hotkey/internal/win
 # golang.org/x/crypto v0.6.0
 ## explicit; go 1.17
 golang.org/x/crypto/md4
