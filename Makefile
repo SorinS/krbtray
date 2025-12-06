@@ -21,11 +21,11 @@ LDFLAGS=-ldflags="-X main.commit=$(COMMIT) -X main.buildDate=$(DATE)"
 -include Makefile.local
 
 # Compilation targets
-all: darwin-arm64 linux-amd64 linux-arm64 windows-amd64
+all: darwin-arm64 windows-amd64
 #all: darwin-arm64 linux-amd64
 
 darwin-arm64:
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o=$(BUILD_DIR)/$(BINARY_NAME).darwin-arm64.bin 
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o=$(BUILD_DIR)/$(BINARY_NAME).darwin-arm64.bin 
 
 darwin-amd64:
 	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME).darwin-amd64.bin
@@ -37,7 +37,7 @@ linux-arm64:
 	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME).linux-arm64.bin
 
 windows-amd64:
-	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME).windows-amd64.exe
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME).windows-amd64.exe
 
 # Testing and linting targets
 test:
