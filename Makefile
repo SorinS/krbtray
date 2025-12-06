@@ -56,4 +56,41 @@ cover:
 clean:
 	$(GOCLEAN)
 	rm -f build/*.bin build/*.exe
+	rm -rf $(BUILD_DIR)/Krb5Tray.app
+
+# macOS .app bundle
+APP_NAME=Krb5Tray
+APP_BUNDLE=$(BUILD_DIR)/$(APP_NAME).app
+
+.PHONY: app
+app: darwin-arm64
+	@echo "Creating macOS app bundle..."
+	@mkdir -p $(APP_BUNDLE)/Contents/MacOS
+	@mkdir -p $(APP_BUNDLE)/Contents/Resources
+	@cp $(BUILD_DIR)/$(BINARY_NAME).darwin-arm64.bin $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
+	@echo '<?xml version="1.0" encoding="UTF-8"?>' > $(APP_BUNDLE)/Contents/Info.plist
+	@echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '<plist version="1.0">' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '<dict>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>CFBundleExecutable</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <string>$(APP_NAME)</string>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>CFBundleIdentifier</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <string>com.krb5tray.app</string>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>CFBundleName</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <string>$(APP_NAME)</string>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>CFBundlePackageType</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <string>APPL</string>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>CFBundleShortVersionString</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <string>1.0.0</string>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>CFBundleVersion</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <string>$(DATE)</string>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>LSMinimumSystemVersion</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <string>11.0</string>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>LSUIElement</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <true/>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <key>NSHighResolutionCapable</key>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '    <true/>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '</dict>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo '</plist>' >> $(APP_BUNDLE)/Contents/Info.plist
+	@echo "Created $(APP_BUNDLE)"
 

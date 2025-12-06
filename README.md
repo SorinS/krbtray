@@ -177,29 +177,27 @@ $env:KRB5_SPN = "HTTP/server.example.com"
 
 ## Global Hotkeys
 
-krb5tray supports global hotkeys for quick access to frequently-used snippets. Snippets with an `index` field (0-9) can be copied directly without opening the menu:
+krb5tray supports global hotkeys for quick access to snippets. Hold the modifier keys and press digits to select a snippet by index:
 
 | Platform | Hotkey | Action |
 |----------|--------|--------|
-| macOS | `Cmd+Option+[0-9]` | Copy snippet with matching index |
-| Windows | `Ctrl+Alt+[0-9]` | Copy snippet with matching index |
-| Linux | `Ctrl+Alt+[0-9]` | Copy snippet with matching index |
+| macOS | `Cmd+Option+[digits]` | Copy snippet with matching index |
+| Windows | `Ctrl+Alt+[digits]` | Copy snippet with matching index |
+| Linux | `Ctrl+Alt+[digits]` | Copy snippet with matching index |
 
-**Hybrid approach:**
-- **Quick access (hotkeys):** Assign `index` values 0-9 to your most frequently used snippets for instant hotkey access
-- **Full list (menu):** Click the tray icon → Snippets to see and select from all configured snippets
+**Multi-digit support:**
+- Keep `Cmd+Option` (or `Ctrl+Alt`) held down
+- Press digits in sequence (e.g., `1` then `2` for snippet 12)
+- Release after 1 second, or the snippet is selected automatically after 1 second of no input
 
-**Example config:**
-```json
-{
-  "snippets": [
-    {"index": 1, "name": "API Token", "value": "Bearer abc123"},
-    {"index": 2, "name": "SSH Key", "value": "ssh-rsa AAAA..."},
-    {"name": "Rarely used snippet", "value": "..."}
-  ]
-}
-```
-The first two snippets are accessible via `Cmd+Option+1` and `Cmd+Option+2`. The third snippet (no index) is only available through the menu.
+**Examples:**
+- `Cmd+Option+5` → selects snippet 5
+- `Cmd+Option+1` then `Cmd+Option+2` (keep modifiers held) → selects snippet 12
+- `Cmd+Option+1` then `Cmd+Option+2` then `Cmd+Option+3` → selects snippet 123
+
+**Menu organization:**
+- 10 or fewer snippets: listed directly in menu
+- More than 10 snippets: grouped into submenus (0-9, 10-19, 20-29, etc.)
 
 **Note:** On macOS, the terminal running the binary needs Accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add Terminal.app (or your terminal of choice).
 
@@ -224,7 +222,7 @@ The first two snippets are accessible via `Cmd+Option+1` and `Cmd+Option+2`. The
 
 | Platform | Method |
 |----------|--------|
-| macOS | `pbcopy` (built-in) |
+| macOS | Native NSPasteboard API (no external binaries) |
 | Windows | `clip` (built-in) |
 | Linux | `xclip` or `xsel` (install separately) |
 
