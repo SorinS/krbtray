@@ -49,6 +49,12 @@ var (
 )
 
 func main() {
+	// Ensure only one instance is running
+	if err := EnsureSingleInstance(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
 	// Initialize the cache
 	InitCache()
 
@@ -344,6 +350,9 @@ func handleSnippetClick(item *systray.MenuItem, entry SnippetEntry) {
 func onExit() {
 	// Cleanup hotkeys
 	CleanupHotkeys()
+
+	// Release single instance lock
+	ReleaseSingleInstance()
 }
 
 func handleMenuClicks() {
