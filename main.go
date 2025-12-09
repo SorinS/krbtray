@@ -77,8 +77,9 @@ func onReady() {
 	systray.SetTitle("") // No text, just the icon
 	systray.SetTooltip("Kerberos Service Ticket Tool")
 
-	// Status display (disabled, just for display)
-	mStatus = systray.AddMenuItem("No ticket", "Current ticket status")
+	// Status display as submenu
+	mStatusMenu := systray.AddMenuItem("Status", "Current status")
+	mStatus = mStatusMenu.AddSubMenuItem("Ready", "")
 	mStatus.Disable()
 
 	systray.AddSeparator()
@@ -120,6 +121,28 @@ func onReady() {
 	// Settings
 	mDebug = systray.AddMenuItemCheckbox("Debug Mode", "Enable debug output", false)
 	mReloadCfg = systray.AddMenuItem("Reload Config", "Reload configuration from file")
+
+	systray.AddSeparator()
+
+	// Hotkeys submenu showing keyboard shortcuts
+	mHotkeys := systray.AddMenuItem("Hotkeys", "Keyboard shortcuts")
+	snippetMods, snippetDesc := getSnippetHotkeyModifiers()
+	urlMods, urlDesc := getURLHotkeyModifiers()
+	sshMods, sshDesc := getSSHHotkeyModifiers()
+	// Avoid unused variable errors
+	_ = snippetMods
+	_ = urlMods
+	_ = sshMods
+
+	mHotkeySnippets := mHotkeys.AddSubMenuItem(fmt.Sprintf("Snippets: %s+[0-9]", snippetDesc), "Copy snippet to clipboard")
+	mHotkeySnippets.Disable()
+	mHotkeyURLs := mHotkeys.AddSubMenuItem(fmt.Sprintf("URLs: %s+[0-9]", urlDesc), "Open URL in browser")
+	mHotkeyURLs.Disable()
+	mHotkeySSH := mHotkeys.AddSubMenuItem(fmt.Sprintf("SSH: %s+[0-9]", sshDesc), "Open SSH connection in terminal")
+	mHotkeySSH.Disable()
+	mHotkeys.AddSubMenuItem("", "")
+	mHotkeyNote := mHotkeys.AddSubMenuItem("Hold modifiers, press digits", "Multi-digit: 1 sec timeout")
+	mHotkeyNote.Disable()
 
 	systray.AddSeparator()
 
