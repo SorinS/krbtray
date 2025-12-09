@@ -30,6 +30,7 @@ var (
 	mSecretsMenu  *systray.MenuItem
 	mURLsMenu     *systray.MenuItem
 	mSnippetsMenu *systray.MenuItem
+	mSSHMenu      *systray.MenuItem
 	mCopyToken    *systray.MenuItem
 	mCopyHeader   *systray.MenuItem
 	mRefresh      *systray.MenuItem
@@ -43,12 +44,14 @@ var (
 	secretMenuItems  []*systray.MenuItem
 	urlMenuItems     []*systray.MenuItem
 	snippetMenuItems []*systray.MenuItem
+	sshMenuItems     []*systray.MenuItem
 
 	// Data bound to menu items (used for click handling after reload)
 	spnEntries     []SPNEntry
 	secretEntries  []*SecretEntry
 	urlEntries     []URLEntry
 	snippetEntries []SnippetEntry
+	sshEntries     []SSHEntry
 
 	// Currently selected secret
 	currentSecret *SecretEntry
@@ -95,6 +98,10 @@ func onReady() {
 	// Snippets submenu
 	mSnippetsMenu = systray.AddMenuItem("Snippets", "Copy snippets to clipboard")
 	loadAndBuildSnippetsMenu()
+
+	// SSH submenu
+	mSSHMenu = systray.AddMenuItem("SSH", "Open SSH connections in terminal")
+	loadAndBuildSSHMenu()
 
 	systray.AddSeparator()
 
@@ -409,6 +416,66 @@ func handleSnippetClickByIndex(item *systray.MenuItem, index int) {
 	}
 }
 
+func loadAndBuildSSHMenu() {
+	// Pre-allocate menu items pool
+	sshMenuItems = make([]*systray.MenuItem, maxMenuItems)
+	sshEntries = make([]SSHEntry, maxMenuItems)
+
+	for i := 0; i < maxMenuItems; i++ {
+		item := mSSHMenu.AddSubMenuItem("", "")
+		item.Hide()
+		sshMenuItems[i] = item
+		go handleSSHClickByIndex(item, i)
+	}
+
+	// Now populate with actual data
+	updateSSHMenu()
+}
+
+func updateSSHMenu() {
+	// Hide all items first
+	for i := 0; i < maxMenuItems; i++ {
+		sshMenuItems[i].Hide()
+	}
+
+	if appConfig == nil || len(appConfig.SSH) == 0 {
+		// Show "No SSH configured" in first slot
+		sshMenuItems[0].SetTitle("No SSH connections configured")
+		sshMenuItems[0].SetTooltip("Edit config file to add SSH connections")
+		sshMenuItems[0].Disable()
+		sshMenuItems[0].Show()
+		return
+	}
+
+	// Update entries and show items
+	for i, entry := range appConfig.SSH {
+		if i >= maxMenuItems {
+			break
+		}
+		sshEntries[i] = entry
+		displayName := fmt.Sprintf("[%d] %s", entry.Index, entry.Name)
+		sshMenuItems[i].SetTitle(displayName)
+		sshMenuItems[i].SetTooltip(entry.Command)
+		sshMenuItems[i].Enable()
+		sshMenuItems[i].Show()
+	}
+}
+
+func handleSSHClickByIndex(item *systray.MenuItem, index int) {
+	for range item.ClickedCh {
+		stateMutex.RLock()
+		entry := sshEntries[index]
+		stateMutex.RUnlock()
+		if entry.Command != "" {
+			if err := openTerminal(entry); err != nil {
+				mStatus.SetTitle(fmt.Sprintf("SSH failed: %s", entry.Name))
+			} else {
+				mStatus.SetTitle(fmt.Sprintf("SSH: %s", entry.Name))
+			}
+		}
+	}
+}
+
 func onExit() {
 	// Cleanup hotkeys
 	CleanupHotkeys()
@@ -455,8 +522,9 @@ func reloadConfig() {
 	updateSecretsMenu()
 	updateURLsMenu()
 	updateSnippetsMenu()
+	updateSSHMenu()
 
-	mStatus.SetTitle(fmt.Sprintf("Config reloaded (%d SPNs, %d snippets)", len(cfg.SPNs), len(cfg.Snippets)))
+	mStatus.SetTitle(fmt.Sprintf("Config reloaded (%d SPNs, %d snippets, %d SSH)", len(cfg.SPNs), len(cfg.Snippets), len(cfg.SSH)))
 }
 
 func updatePlatformStatus() {

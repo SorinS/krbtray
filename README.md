@@ -107,6 +107,10 @@ krb5tray uses a JSON configuration file located at `~/.config/krb5tray.json`. Th
   "snippets": [
     {"index": 1, "name": "Bearer Token", "value": "Bearer abc123..."},
     {"index": 2, "name": "API Key", "value": "x-api-key: secret123"}
+  ],
+  "ssh": [
+    {"index": 0, "name": "Prod Server", "command": "ssh admin@prod.example.com", "terminal": "/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal {cmd}"},
+    {"index": 1, "name": "Dev Server", "command": "ssh -A dev@dev.example.com", "terminal": "/usr/bin/gnome-terminal -- {cmd}"}
   ]
 }
 ```
@@ -117,6 +121,23 @@ krb5tray uses a JSON configuration file located at `~/.config/krb5tray.json`. Th
 | `secrets` | CSM secret configurations |
 | `urls` | URL bookmarks that open in browser (use `index` for hotkey access) |
 | `snippets` | Text snippets copied to clipboard (use `index` for hotkey access) |
+| `ssh` | SSH connections opened in user-defined terminal (use `index` for hotkey access) |
+
+### SSH Terminal Configuration
+
+The `terminal` field in SSH entries is a command template with `{cmd}` as a placeholder for the SSH command. Examples for different terminals:
+
+| Platform | Terminal | Template |
+|----------|----------|----------|
+| macOS | Terminal.app | `/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal {cmd}` |
+| macOS | iTerm2 | `/Applications/iTerm.app/Contents/MacOS/iTerm2 {cmd}` |
+| macOS | Alacritty | `/Applications/Alacritty.app/Contents/MacOS/alacritty -e {cmd}` |
+| Linux | gnome-terminal | `/usr/bin/gnome-terminal -- {cmd}` |
+| Linux | Alacritty | `/usr/bin/alacritty -e {cmd}` |
+| Linux | Konsole | `/usr/bin/konsole -e {cmd}` |
+| Windows | cmd.exe | `C:\\Windows\\System32\\cmd.exe /k {cmd}` |
+| Windows | Windows Terminal | `wt.exe {cmd}` |
+| Windows | PowerShell | `powershell.exe -NoExit -Command {cmd}` |
 
 ### Setting the SPN (Alternative)
 
@@ -167,6 +188,7 @@ $env:KRB5_SPN = "HTTP/server.example.com"
 | CSM Secrets | Submenu to manage CSM secrets |
 | URLs | Submenu to open configured URLs in browser |
 | Snippets | Submenu to copy text snippets to clipboard |
+| SSH | Submenu to open SSH connections in terminal |
 | Refresh Ticket | Request/refresh the service ticket for current SPN |
 | Copy HTTP Header | Copy `Negotiate <base64-token>` to clipboard |
 | Copy Token | Copy raw base64 token to clipboard |
@@ -195,9 +217,17 @@ krb5tray supports global hotkeys for quick access to snippets and URLs. Hold the
 | Windows | `Ctrl+Shift+[digits]` | Open URL with matching index |
 | Linux | `Ctrl+Shift+[digits]` | Open URL with matching index |
 
+### SSH Hotkeys
+
+| Platform | Hotkey | Action |
+|----------|--------|--------|
+| macOS | `Ctrl+Option+[digits]` | Open SSH connection with matching index |
+| Windows | `Alt+Shift+[digits]` | Open SSH connection with matching index |
+| Linux | `Alt+Shift+[digits]` | Open SSH connection with matching index |
+
 ### Multi-digit Support
 
-Both snippet and URL hotkeys support multi-digit input:
+All hotkeys (snippets, URLs, SSH) support multi-digit input:
 
 - Keep the modifier keys held down
 - Press digits in sequence (e.g., `1` then `2` for index 12)
@@ -212,7 +242,11 @@ Both snippet and URL hotkeys support multi-digit input:
 - `Ctrl+Cmd+0` → opens URL with index 0
 - `Ctrl+Cmd+1` then `2` (keep modifiers held) → opens URL with index 12
 
-Both snippets and URLs use the `index` field from config for hotkey access.
+**SSH Examples (macOS):**
+- `Ctrl+Option+0` → opens SSH connection with index 0
+- `Ctrl+Option+1` then `2` (keep modifiers held) → opens SSH with index 12
+
+All items (snippets, URLs, SSH) use the `index` field from config for hotkey access.
 
 **Note:** On macOS, the terminal running the binary needs Accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add Terminal.app (or your terminal of choice).
 

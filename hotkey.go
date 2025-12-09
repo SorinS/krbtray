@@ -10,12 +10,16 @@ import (
 var (
 	snippetHotkeys [10]*hotkey.Hotkey // Cmd+Option+0 through Cmd+Option+9
 	urlHotkeys     [10]*hotkey.Hotkey // Ctrl+Cmd+0 through Ctrl+Cmd+9
+	sshHotkeys     [10]*hotkey.Hotkey // Ctrl+Option+0 through Ctrl+Option+9
 
 	snippetInput   string      // Accumulated digit input (e.g., "1", "15")
 	snippetTimeout *time.Timer // Timeout for multi-digit input
 
 	urlInput   string      // Accumulated digit input for URLs
 	urlTimeout *time.Timer // Timeout for multi-digit URL input
+
+	sshInput   string      // Accumulated digit input for SSH
+	sshTimeout *time.Timer // Timeout for multi-digit SSH input
 
 	inputTimeout = 1 * time.Second
 )
@@ -79,13 +83,36 @@ func initHotkeysAsync() {
 		}(i, hk)
 	}
 
-	if snippetCount > 0 || urlCount > 0 {
-		mStatus.SetTitle(fmt.Sprintf("Hotkeys: %s (snippets), %s (URLs)", snippetDesc, urlDesc))
+	// Register SSH hotkeys (Ctrl+Option+0 through Ctrl+Option+9)
+	sshMods, sshDesc := getSSHHotkeyModifiers()
+	sshCount := 0
+	for i, key := range keys {
+		hk := hotkey.New(sshMods, key)
+		if err := hk.Register(); err != nil {
+			if debugMode {
+				fmt.Printf("Failed to register hotkey %s+%d: %v\n", sshDesc, i, err)
+			}
+			continue
+		}
+		sshHotkeys[i] = hk
+		sshCount++
+
+		// Start listener for this hotkey
+		go func(num int, h *hotkey.Hotkey) {
+			for range h.Keydown() {
+				handleSSHDigit(num)
+			}
+		}(i, hk)
+	}
+
+	if snippetCount > 0 || urlCount > 0 || sshCount > 0 {
+		mStatus.SetTitle(fmt.Sprintf("Hotkeys: %s (snippets), %s (URLs), %s (SSH)", snippetDesc, urlDesc, sshDesc))
 	}
 
 	if debugMode {
 		fmt.Printf("Registered %d snippet hotkeys (%s+[0-9])\n", snippetCount, snippetDesc)
 		fmt.Printf("Registered %d URL hotkeys (%s+[0-9])\n", urlCount, urlDesc)
+		fmt.Printf("Registered %d SSH hotkeys (%s+[0-9])\n", sshCount, sshDesc)
 	}
 }
 
@@ -213,6 +240,68 @@ func openURLByIndex(num int) {
 	mStatus.SetTitle(fmt.Sprintf("No URL with index %d", num))
 }
 
+// handleSSHDigit handles Ctrl+Option+N presses and accumulates digits
+func handleSSHDigit(num int) {
+	stateMutex.Lock()
+	sshInput += fmt.Sprintf("%d", num)
+	currentInput := sshInput
+	stateMutex.Unlock()
+
+	// Update status to show current input
+	mStatus.SetTitle(fmt.Sprintf("SSH #%s...", currentInput))
+
+	// Reset/start timeout - after 1 second of no more digits, open SSH
+	if sshTimeout != nil {
+		sshTimeout.Stop()
+	}
+	sshTimeout = time.AfterFunc(inputTimeout, finalizeSSHSelection)
+}
+
+func finalizeSSHSelection() {
+	stateMutex.Lock()
+	input := sshInput
+	sshInput = "" // Reset for next time
+	stateMutex.Unlock()
+
+	if input != "" {
+		selectSSHByInput(input)
+	}
+}
+
+func selectSSHByInput(input string) {
+	if input == "" {
+		mStatus.SetTitle("No SSH number entered")
+		return
+	}
+
+	// Parse the number
+	var num int
+	fmt.Sscanf(input, "%d", &num)
+
+	openSSHByIndex(num)
+}
+
+func openSSHByIndex(num int) {
+	// Find SSH with matching index
+	if appConfig == nil || len(appConfig.SSH) == 0 {
+		mStatus.SetTitle("No SSH connections configured")
+		return
+	}
+
+	for _, ssh := range appConfig.SSH {
+		if ssh.Index == num {
+			if err := openTerminal(ssh); err != nil {
+				mStatus.SetTitle(fmt.Sprintf("SSH failed: %s", ssh.Name))
+			} else {
+				mStatus.SetTitle(fmt.Sprintf("SSH: [%d] %s", num, ssh.Name))
+			}
+			return
+		}
+	}
+
+	mStatus.SetTitle(fmt.Sprintf("No SSH with index %d", num))
+}
+
 // CleanupHotkeys unregisters all hotkeys
 func CleanupHotkeys() {
 	for _, hk := range snippetHotkeys {
@@ -221,6 +310,11 @@ func CleanupHotkeys() {
 		}
 	}
 	for _, hk := range urlHotkeys {
+		if hk != nil {
+			hk.Unregister()
+		}
+	}
+	for _, hk := range sshHotkeys {
 		if hk != nil {
 			hk.Unregister()
 		}

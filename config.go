@@ -12,6 +12,7 @@ type Config struct {
 	Secrets  []SecretEntry  `json:"secrets,omitempty"`
 	URLs     []URLEntry     `json:"urls,omitempty"`
 	Snippets []SnippetEntry `json:"snippets,omitempty"`
+	SSH      []SSHEntry     `json:"ssh,omitempty"`
 }
 
 // SnippetEntry represents a text snippet that can be copied to clipboard
@@ -26,6 +27,14 @@ type URLEntry struct {
 	Index int    `json:"index"` // Numeric index for hotkey access
 	Name  string `json:"name"`  // Display name in menu
 	URL   string `json:"url"`   // The URL to open
+}
+
+// SSHEntry represents an SSH connection configuration
+type SSHEntry struct {
+	Index    int    `json:"index"`    // Numeric index for hotkey access
+	Name     string `json:"name"`     // Display name in menu
+	Command  string `json:"command"`  // SSH command to execute (e.g., "ssh user@host")
+	Terminal string `json:"terminal"` // Terminal command template with {cmd} placeholder
 }
 
 // SecretEntry represents a CSM secret configuration

@@ -15,3 +15,9 @@ func getSnippetHotkeyModifiers() ([]hotkey.Modifier, string) {
 func getURLHotkeyModifiers() ([]hotkey.Modifier, string) {
 	return []hotkey.Modifier{hotkey.ModCtrl, hotkey.ModShift}, "Ctrl+Shift"
 }
+
+// getSSHHotkeyModifiers returns the platform-specific modifiers for the SSH hotkey
+// Windows: Alt+Shift+[0-9]
+func getSSHHotkeyModifiers() ([]hotkey.Modifier, string) {
+	return []hotkey.Modifier{hotkey.ModAlt, hotkey.ModShift}, "Alt+Shift"
+}
