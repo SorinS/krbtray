@@ -101,8 +101,8 @@ krb5tray uses a JSON configuration file located at `~/.config/krb5tray.json`. Th
     }
   ],
   "urls": [
-    {"name": "Jira", "url": "https://jira.example.com"},
-    {"name": "Confluence", "url": "https://confluence.example.com"}
+    {"index": 0, "name": "Jira", "url": "https://jira.example.com"},
+    {"index": 1, "name": "Confluence", "url": "https://confluence.example.com"}
   ],
   "snippets": [
     {"index": 1, "name": "Bearer Token", "value": "Bearer abc123..."},
@@ -115,8 +115,8 @@ krb5tray uses a JSON configuration file located at `~/.config/krb5tray.json`. Th
 |---------|-------------|
 | `spns` | Service Principal Names for Kerberos tickets |
 | `secrets` | CSM secret configurations |
-| `urls` | URL bookmarks that open in browser |
-| `snippets` | Text snippets copied to clipboard (use `index` 0-9 for hotkey access) |
+| `urls` | URL bookmarks that open in browser (use `index` for hotkey access) |
+| `snippets` | Text snippets copied to clipboard (use `index` for hotkey access) |
 
 ### Setting the SPN (Alternative)
 
@@ -177,7 +177,9 @@ $env:KRB5_SPN = "HTTP/server.example.com"
 
 ## Global Hotkeys
 
-krb5tray supports global hotkeys for quick access to snippets. Hold the modifier keys and press digits to select a snippet by index:
+krb5tray supports global hotkeys for quick access to snippets and URLs. Hold the modifier keys and press digits to select by index:
+
+### Snippet Hotkeys
 
 | Platform | Hotkey | Action |
 |----------|--------|--------|
@@ -185,19 +187,32 @@ krb5tray supports global hotkeys for quick access to snippets. Hold the modifier
 | Windows | `Ctrl+Alt+[digits]` | Copy snippet with matching index |
 | Linux | `Ctrl+Alt+[digits]` | Copy snippet with matching index |
 
-**Multi-digit support:**
-- Keep `Cmd+Option` (or `Ctrl+Alt`) held down
-- Press digits in sequence (e.g., `1` then `2` for snippet 12)
-- Release after 1 second, or the snippet is selected automatically after 1 second of no input
+### URL Hotkeys
 
-**Examples:**
-- `Cmd+Option+5` → selects snippet 5
-- `Cmd+Option+1` then `Cmd+Option+2` (keep modifiers held) → selects snippet 12
-- `Cmd+Option+1` then `Cmd+Option+2` then `Cmd+Option+3` → selects snippet 123
+| Platform | Hotkey | Action |
+|----------|--------|--------|
+| macOS | `Ctrl+Cmd+[digits]` | Open URL with matching index |
+| Windows | `Ctrl+Shift+[digits]` | Open URL with matching index |
+| Linux | `Ctrl+Shift+[digits]` | Open URL with matching index |
 
-**Menu organization:**
-- 10 or fewer snippets: listed directly in menu
-- More than 10 snippets: grouped into submenus (0-9, 10-19, 20-29, etc.)
+### Multi-digit Support
+
+Both snippet and URL hotkeys support multi-digit input:
+
+- Keep the modifier keys held down
+- Press digits in sequence (e.g., `1` then `2` for index 12)
+- The action triggers automatically after 1 second of no additional input
+
+**Snippet Examples (macOS):**
+- `Cmd+Option+5` → copies snippet with index 5
+- `Cmd+Option+1` then `2` (keep modifiers held) → copies snippet with index 12
+- `Cmd+Option+1` then `2` then `3` → copies snippet with index 123
+
+**URL Examples (macOS):**
+- `Ctrl+Cmd+0` → opens URL with index 0
+- `Ctrl+Cmd+1` then `2` (keep modifiers held) → opens URL with index 12
+
+Both snippets and URLs use the `index` field from config for hotkey access.
 
 **Note:** On macOS, the terminal running the binary needs Accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add Terminal.app (or your terminal of choice).
 

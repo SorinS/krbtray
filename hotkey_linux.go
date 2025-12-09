@@ -5,7 +5,13 @@ package main
 import "golang.design/x/hotkey"
 
 // getSnippetHotkeyModifiers returns the platform-specific modifiers for the snippet hotkey
-// Linux: Ctrl+Alt+K (Mod1 is typically Alt on X11)
+// Linux: Ctrl+Alt+[0-9] (Mod1 is typically Alt on X11)
 func getSnippetHotkeyModifiers() ([]hotkey.Modifier, string) {
-	return []hotkey.Modifier{hotkey.ModCtrl, hotkey.Mod1}, "Ctrl+Alt+K"
+	return []hotkey.Modifier{hotkey.ModCtrl, hotkey.Mod1}, "Ctrl+Alt"
+}
+
+// getURLHotkeyModifiers returns the platform-specific modifiers for the URL hotkey
+// Linux: Ctrl+Shift+[0-9]
+func getURLHotkeyModifiers() ([]hotkey.Modifier, string) {
+	return []hotkey.Modifier{hotkey.ModCtrl, hotkey.ModShift}, "Ctrl+Shift"
 }

@@ -322,7 +322,8 @@ func updateURLsMenu() {
 			break
 		}
 		urlEntries[i] = entry
-		urlMenuItems[i].SetTitle(entry.Name)
+		displayName := fmt.Sprintf("[%d] %s", entry.Index, entry.Name)
+		urlMenuItems[i].SetTitle(displayName)
 		urlMenuItems[i].SetTooltip(entry.URL)
 		urlMenuItems[i].Enable()
 		urlMenuItems[i].Show()

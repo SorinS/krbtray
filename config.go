@@ -23,8 +23,9 @@ type SnippetEntry struct {
 
 // URLEntry represents a URL bookmark
 type URLEntry struct {
-	Name string `json:"name"` // Display name in menu
-	URL  string `json:"url"`  // The URL to open
+	Index int    `json:"index"` // Numeric index for hotkey access
+	Name  string `json:"name"`  // Display name in menu
+	URL   string `json:"url"`   // The URL to open
 }
 
 // SecretEntry represents a CSM secret configuration
