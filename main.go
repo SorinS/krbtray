@@ -44,6 +44,12 @@ var (
 	urlMenuItems     []*systray.MenuItem
 	snippetMenuItems []*systray.MenuItem
 
+	// Data bound to menu items (used for click handling after reload)
+	spnEntries     []SPNEntry
+	secretEntries  []*SecretEntry
+	urlEntries     []URLEntry
+	snippetEntries []SnippetEntry
+
 	// Currently selected secret
 	currentSecret *SecretEntry
 )
@@ -139,6 +145,8 @@ func onReady() {
 	InitHotkeys()
 }
 
+const maxMenuItems = 50 // Maximum items per menu type
+
 func loadAndBuildSPNMenu() {
 	// Try to load config
 	cfg, err := LoadConfig("")
@@ -153,64 +161,118 @@ func loadAndBuildSPNMenu() {
 
 	appConfig = cfg
 
-	if cfg == nil || len(cfg.SPNs) == 0 {
-		// No SPNs configured
-		noSPN := mSPNMenu.AddSubMenuItem("No SPNs configured", "Edit config file to add SPNs")
-		noSPN.Disable()
+	// Pre-allocate menu items pool
+	spnMenuItems = make([]*systray.MenuItem, maxMenuItems)
+	spnEntries = make([]SPNEntry, maxMenuItems)
 
-		configPath := mSPNMenu.AddSubMenuItem(fmt.Sprintf("Config: %s", DefaultConfigPath()), "Configuration file location")
-		configPath.Disable()
-		return
+	for i := 0; i < maxMenuItems; i++ {
+		item := mSPNMenu.AddSubMenuItem("", "")
+		item.Hide()
+		spnMenuItems[i] = item
+		go handleSPNClickByIndex(item, i)
 	}
 
-	// Clear existing submenu items tracking
-	spnMenuItems = make([]*systray.MenuItem, 0, len(cfg.SPNs))
-
-	// Add each SPN as a submenu item
-	for _, entry := range cfg.SPNs {
-		item := mSPNMenu.AddSubMenuItem(entry.Name, entry.SPN)
-		spnMenuItems = append(spnMenuItems, item)
-
-		// Start a goroutine to handle clicks for this SPN
-		go handleSPNClick(item, entry)
-	}
-
-	// Add separator and config path info
+	// Add config path info at the end (always visible)
 	mSPNMenu.AddSubMenuItem("", "")
 	configInfo := mSPNMenu.AddSubMenuItem(fmt.Sprintf("Config: %s", DefaultConfigPath()), "Configuration file location")
 	configInfo.Disable()
+
+	// Now populate with actual data
+	updateSPNMenu()
 }
 
-func handleSPNClick(item *systray.MenuItem, entry SPNEntry) {
+func updateSPNMenu() {
+	// Hide all items first
+	for i := 0; i < maxMenuItems; i++ {
+		spnMenuItems[i].Hide()
+	}
+
+	if appConfig == nil || len(appConfig.SPNs) == 0 {
+		// Show "No SPNs configured" in first slot
+		spnMenuItems[0].SetTitle("No SPNs configured")
+		spnMenuItems[0].SetTooltip("Edit config file to add SPNs")
+		spnMenuItems[0].Disable()
+		spnMenuItems[0].Show()
+		return
+	}
+
+	// Update entries and show items
+	for i, entry := range appConfig.SPNs {
+		if i >= maxMenuItems {
+			break
+		}
+		spnEntries[i] = entry
+		spnMenuItems[i].SetTitle(entry.Name)
+		spnMenuItems[i].SetTooltip(entry.SPN)
+		spnMenuItems[i].Enable()
+		spnMenuItems[i].Show()
+	}
+}
+
+func handleSPNClickByIndex(item *systray.MenuItem, index int) {
 	for range item.ClickedCh {
-		setSPN(entry.SPN, entry.Name)
+		stateMutex.RLock()
+		entry := spnEntries[index]
+		stateMutex.RUnlock()
+		if entry.SPN != "" {
+			setSPN(entry.SPN, entry.Name)
+		}
 	}
 }
 
 func loadAndBuildSecretsMenu() {
+	// Pre-allocate menu items pool
+	secretMenuItems = make([]*systray.MenuItem, maxMenuItems)
+	secretEntries = make([]*SecretEntry, maxMenuItems)
+
+	for i := 0; i < maxMenuItems; i++ {
+		item := mSecretsMenu.AddSubMenuItem("", "")
+		item.Hide()
+		secretMenuItems[i] = item
+		go handleSecretClickByIndex(item, i)
+	}
+
+	// Now populate with actual data
+	updateSecretsMenu()
+}
+
+func updateSecretsMenu() {
+	// Hide all items first
+	for i := 0; i < maxMenuItems; i++ {
+		secretMenuItems[i].Hide()
+	}
+
 	if appConfig == nil || len(appConfig.Secrets) == 0 {
-		noSecrets := mSecretsMenu.AddSubMenuItem("No secrets configured", "Edit config file to add secrets")
-		noSecrets.Disable()
+		// Show "No secrets configured" in first slot
+		secretMenuItems[0].SetTitle("No secrets configured")
+		secretMenuItems[0].SetTooltip("Edit config file to add secrets")
+		secretMenuItems[0].Disable()
+		secretMenuItems[0].Show()
 		return
 	}
 
-	// Clear existing submenu items tracking
-	secretMenuItems = make([]*systray.MenuItem, 0, len(appConfig.Secrets))
-
-	// Add each secret as a submenu item
+	// Update entries and show items
 	for i := range appConfig.Secrets {
+		if i >= maxMenuItems {
+			break
+		}
 		entry := &appConfig.Secrets[i]
-		item := mSecretsMenu.AddSubMenuItem(entry.Name, fmt.Sprintf("Role: %s (%s)", entry.RoleName, entry.RoleType))
-		secretMenuItems = append(secretMenuItems, item)
-
-		// Start a goroutine to handle clicks for this secret
-		go handleSecretClick(item, entry)
+		secretEntries[i] = entry
+		secretMenuItems[i].SetTitle(entry.Name)
+		secretMenuItems[i].SetTooltip(fmt.Sprintf("Role: %s (%s)", entry.RoleName, entry.RoleType))
+		secretMenuItems[i].Enable()
+		secretMenuItems[i].Show()
 	}
 }
 
-func handleSecretClick(item *systray.MenuItem, entry *SecretEntry) {
+func handleSecretClickByIndex(item *systray.MenuItem, index int) {
 	for range item.ClickedCh {
-		setSecret(entry)
+		stateMutex.RLock()
+		entry := secretEntries[index]
+		stateMutex.RUnlock()
+		if entry != nil {
+			setSecret(entry)
+		}
 	}
 }
 
@@ -224,125 +286,124 @@ func setSecret(entry *SecretEntry) {
 }
 
 func loadAndBuildURLsMenu() {
+	// Pre-allocate menu items pool
+	urlMenuItems = make([]*systray.MenuItem, maxMenuItems)
+	urlEntries = make([]URLEntry, maxMenuItems)
+
+	for i := 0; i < maxMenuItems; i++ {
+		item := mURLsMenu.AddSubMenuItem("", "")
+		item.Hide()
+		urlMenuItems[i] = item
+		go handleURLClickByIndex(item, i)
+	}
+
+	// Now populate with actual data
+	updateURLsMenu()
+}
+
+func updateURLsMenu() {
+	// Hide all items first
+	for i := 0; i < maxMenuItems; i++ {
+		urlMenuItems[i].Hide()
+	}
+
 	if appConfig == nil || len(appConfig.URLs) == 0 {
-		noURLs := mURLsMenu.AddSubMenuItem("No URLs configured", "Edit config file to add URLs")
-		noURLs.Disable()
+		// Show "No URLs configured" in first slot
+		urlMenuItems[0].SetTitle("No URLs configured")
+		urlMenuItems[0].SetTooltip("Edit config file to add URLs")
+		urlMenuItems[0].Disable()
+		urlMenuItems[0].Show()
 		return
 	}
 
-	// Clear existing submenu items tracking
-	urlMenuItems = make([]*systray.MenuItem, 0, len(appConfig.URLs))
-
-	// Add each URL as a submenu item
-	for _, entry := range appConfig.URLs {
-		item := mURLsMenu.AddSubMenuItem(entry.Name, entry.URL)
-		urlMenuItems = append(urlMenuItems, item)
-
-		// Start a goroutine to handle clicks for this URL
-		go handleURLClick(item, entry)
+	// Update entries and show items
+	for i, entry := range appConfig.URLs {
+		if i >= maxMenuItems {
+			break
+		}
+		urlEntries[i] = entry
+		urlMenuItems[i].SetTitle(entry.Name)
+		urlMenuItems[i].SetTooltip(entry.URL)
+		urlMenuItems[i].Enable()
+		urlMenuItems[i].Show()
 	}
 }
 
-func handleURLClick(item *systray.MenuItem, entry URLEntry) {
+func handleURLClickByIndex(item *systray.MenuItem, index int) {
 	for range item.ClickedCh {
-		if err := openBrowser(entry.URL); err != nil {
-			mStatus.SetTitle(fmt.Sprintf("Failed to open: %s", entry.Name))
-		} else {
-			mStatus.SetTitle(fmt.Sprintf("Opened: %s", entry.Name))
+		stateMutex.RLock()
+		entry := urlEntries[index]
+		stateMutex.RUnlock()
+		if entry.URL != "" {
+			if err := openBrowser(entry.URL); err != nil {
+				mStatus.SetTitle(fmt.Sprintf("Failed to open: %s", entry.Name))
+			} else {
+				mStatus.SetTitle(fmt.Sprintf("Opened: %s", entry.Name))
+			}
 		}
 	}
 }
 
 func loadAndBuildSnippetsMenu() {
+	// Pre-allocate menu items pool (flat list, no grouping for simplicity in reload)
+	snippetMenuItems = make([]*systray.MenuItem, maxMenuItems)
+	snippetEntries = make([]SnippetEntry, maxMenuItems)
+
+	for i := 0; i < maxMenuItems; i++ {
+		item := mSnippetsMenu.AddSubMenuItem("", "")
+		item.Hide()
+		snippetMenuItems[i] = item
+		go handleSnippetClickByIndex(item, i)
+	}
+
+	// Now populate with actual data
+	updateSnippetsMenu()
+}
+
+func updateSnippetsMenu() {
+	// Hide all items first
+	for i := 0; i < maxMenuItems; i++ {
+		snippetMenuItems[i].Hide()
+	}
+
 	if appConfig == nil || len(appConfig.Snippets) == 0 {
-		noSnippets := mSnippetsMenu.AddSubMenuItem("No snippets configured", "Edit config file to add snippets")
-		noSnippets.Disable()
+		// Show "No snippets configured" in first slot
+		snippetMenuItems[0].SetTitle("No snippets configured")
+		snippetMenuItems[0].SetTooltip("Edit config file to add snippets")
+		snippetMenuItems[0].Disable()
+		snippetMenuItems[0].Show()
 		return
 	}
 
-	// Clear existing submenu items tracking
-	snippetMenuItems = make([]*systray.MenuItem, 0, len(appConfig.Snippets))
-
-	// Group snippets by index ranges (1-10, 11-20, etc.)
-	const groupSize = 10
-
-	// Find max index to determine number of groups needed
-	maxIndex := 0
-	for _, entry := range appConfig.Snippets {
-		if entry.Index > maxIndex {
-			maxIndex = entry.Index
+	// Update entries and show items
+	for i, entry := range appConfig.Snippets {
+		if i >= maxMenuItems {
+			break
 		}
-	}
-
-	// If 10 or fewer snippets, don't group - just list them directly
-	if len(appConfig.Snippets) <= groupSize {
-		for _, entry := range appConfig.Snippets {
-			addSnippetMenuItem(mSnippetsMenu, entry)
+		snippetEntries[i] = entry
+		displayName := fmt.Sprintf("[%d] %s", entry.Index, entry.Name)
+		tooltip := entry.Value
+		if len(tooltip) > 50 {
+			tooltip = tooltip[:50] + "..."
 		}
-		return
-	}
-
-	// Create groups based on index ranges
-	numGroups := (maxIndex / groupSize) + 1
-	groups := make(map[int][]SnippetEntry)
-
-	for _, entry := range appConfig.Snippets {
-		groupNum := entry.Index / groupSize
-		groups[groupNum] = append(groups[groupNum], entry)
-	}
-
-	// Create submenus for each group that has snippets
-	for g := 0; g < numGroups; g++ {
-		snippets, exists := groups[g]
-		if !exists || len(snippets) == 0 {
-			continue
-		}
-
-		// Calculate range for this group
-		startIdx := g * groupSize
-		endIdx := startIdx + groupSize - 1
-		if g == 0 {
-			startIdx = 0 // First group is 0-9
-		}
-
-		groupLabel := fmt.Sprintf("Snippets %d-%d", startIdx, endIdx)
-		groupMenu := mSnippetsMenu.AddSubMenuItem(groupLabel, "")
-
-		// Add snippets in this group
-		for _, entry := range snippets {
-			addSnippetSubMenuItem(groupMenu, entry)
-		}
+		snippetMenuItems[i].SetTitle(displayName)
+		snippetMenuItems[i].SetTooltip(tooltip)
+		snippetMenuItems[i].Enable()
+		snippetMenuItems[i].Show()
 	}
 }
 
-func addSnippetMenuItem(parent *systray.MenuItem, entry SnippetEntry) {
-	displayName := fmt.Sprintf("[%d] %s", entry.Index, entry.Name)
-	tooltip := entry.Value
-	if len(tooltip) > 50 {
-		tooltip = tooltip[:50] + "..."
-	}
-	item := parent.AddSubMenuItem(displayName, tooltip)
-	snippetMenuItems = append(snippetMenuItems, item)
-	go handleSnippetClick(item, entry)
-}
-
-func addSnippetSubMenuItem(parent *systray.MenuItem, entry SnippetEntry) {
-	displayName := fmt.Sprintf("[%d] %s", entry.Index, entry.Name)
-	tooltip := entry.Value
-	if len(tooltip) > 50 {
-		tooltip = tooltip[:50] + "..."
-	}
-	item := parent.AddSubMenuItem(displayName, tooltip)
-	snippetMenuItems = append(snippetMenuItems, item)
-	go handleSnippetClick(item, entry)
-}
-
-func handleSnippetClick(item *systray.MenuItem, entry SnippetEntry) {
+func handleSnippetClickByIndex(item *systray.MenuItem, index int) {
 	for range item.ClickedCh {
-		if err := copyToClipboard(entry.Value); err != nil {
-			mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
-		} else {
-			mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
+		stateMutex.RLock()
+		entry := snippetEntries[index]
+		stateMutex.RUnlock()
+		if entry.Name != "" {
+			if err := copyToClipboard(entry.Value); err != nil {
+				mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
+			} else {
+				mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
+			}
 		}
 	}
 }
@@ -387,10 +448,14 @@ func reloadConfig() {
 		return
 	}
 	appConfig = cfg
-	mStatus.SetTitle(fmt.Sprintf("Config reloaded (%d SPNs)", len(cfg.SPNs)))
 
-	// Note: We can't dynamically rebuild the menu in systray
-	// User needs to restart the app to see new SPNs
+	// Update all menus with new config data
+	updateSPNMenu()
+	updateSecretsMenu()
+	updateURLsMenu()
+	updateSnippetsMenu()
+
+	mStatus.SetTitle(fmt.Sprintf("Config reloaded (%d SPNs, %d snippets)", len(cfg.SPNs), len(cfg.Snippets)))
 }
 
 func updatePlatformStatus() {
