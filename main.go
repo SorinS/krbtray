@@ -67,6 +67,11 @@ func main() {
 	// Initialize the cache
 	InitCache()
 
+	// Initialize Lua scripting engine
+	if err := InitLuaEngine(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to initialize Lua engine: %v\n", err)
+	}
+
 	systray.Run(onReady, onExit)
 }
 
@@ -365,13 +370,37 @@ func handleURLClickByIndex(item *systray.MenuItem, index int) {
 		stateMutex.RLock()
 		entry := urlEntries[index]
 		stateMutex.RUnlock()
-		if entry.URL != "" {
-			if err := openBrowser(entry.URL); err != nil {
-				mStatus.SetTitle(fmt.Sprintf("Failed to open: %s", entry.Name))
-			} else {
-				mStatus.SetTitle(fmt.Sprintf("Opened: %s", entry.Name))
-			}
+		if entry.URL != "" || entry.Script != "" {
+			executeURLEntry(entry)
 		}
+	}
+}
+
+func executeURLEntry(entry URLEntry) {
+	// If script is defined, run it instead of opening URL directly
+	if entry.Script != "" {
+		engine := GetLuaEngine()
+		if engine != nil {
+			ctx := map[string]string{
+				"url":   entry.URL,
+				"name":  entry.Name,
+				"index": fmt.Sprintf("%d", entry.Index),
+			}
+			_, err := engine.RunScript(entry.Script, ctx)
+			if err != nil {
+				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
+			} else {
+				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
+			}
+			return
+		}
+	}
+
+	// Default behavior: open URL in browser
+	if err := openBrowser(entry.URL); err != nil {
+		mStatus.SetTitle(fmt.Sprintf("Failed to open: %s", entry.Name))
+	} else {
+		mStatus.SetTitle(fmt.Sprintf("Opened: %s", entry.Name))
 	}
 }
 
@@ -429,13 +458,44 @@ func handleSnippetClickByIndex(item *systray.MenuItem, index int) {
 		stateMutex.RLock()
 		entry := snippetEntries[index]
 		stateMutex.RUnlock()
-		if entry.Name != "" {
-			if err := copyToClipboard(entry.Value); err != nil {
-				mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
-			} else {
-				mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
-			}
+		if entry.Name != "" || entry.Script != "" {
+			executeSnippetEntry(entry)
 		}
+	}
+}
+
+func executeSnippetEntry(entry SnippetEntry) {
+	// If script is defined, run it instead of copying value directly
+	if entry.Script != "" {
+		engine := GetLuaEngine()
+		if engine != nil {
+			ctx := map[string]string{
+				"value": entry.Value,
+				"name":  entry.Name,
+				"index": fmt.Sprintf("%d", entry.Index),
+			}
+			result, err := engine.RunScript(entry.Script, ctx)
+			if err != nil {
+				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
+			} else if result != "" {
+				// If script returns a result, copy that to clipboard
+				if err := copyToClipboard(result); err != nil {
+					mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
+				} else {
+					mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
+				}
+			} else {
+				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
+			}
+			return
+		}
+	}
+
+	// Default behavior: copy value to clipboard
+	if err := copyToClipboard(entry.Value); err != nil {
+		mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
+	} else {
+		mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
 	}
 }
 
@@ -489,13 +549,38 @@ func handleSSHClickByIndex(item *systray.MenuItem, index int) {
 		stateMutex.RLock()
 		entry := sshEntries[index]
 		stateMutex.RUnlock()
-		if entry.Command != "" {
-			if err := openTerminal(entry); err != nil {
-				mStatus.SetTitle(fmt.Sprintf("SSH failed: %s", entry.Name))
-			} else {
-				mStatus.SetTitle(fmt.Sprintf("SSH: %s", entry.Name))
-			}
+		if entry.Command != "" || entry.Script != "" {
+			executeSSHEntry(entry)
 		}
+	}
+}
+
+func executeSSHEntry(entry SSHEntry) {
+	// If script is defined, run it instead of/before opening terminal
+	if entry.Script != "" {
+		engine := GetLuaEngine()
+		if engine != nil {
+			ctx := map[string]string{
+				"command":  entry.Command,
+				"terminal": entry.Terminal,
+				"name":     entry.Name,
+				"index":    fmt.Sprintf("%d", entry.Index),
+			}
+			_, err := engine.RunScript(entry.Script, ctx)
+			if err != nil {
+				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
+			} else {
+				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
+			}
+			return
+		}
+	}
+
+	// Default behavior: open terminal with SSH command
+	if err := openTerminal(entry); err != nil {
+		mStatus.SetTitle(fmt.Sprintf("SSH failed: %s", entry.Name))
+	} else {
+		mStatus.SetTitle(fmt.Sprintf("SSH: %s", entry.Name))
 	}
 }
 

@@ -82,7 +82,7 @@ CGO_ENABLED=1 go build -o krb5tray .
 
 ### Configuration File
 
-krb5tray uses a JSON configuration file located at `~/.config/krb5tray.json`. The file supports the following sections:
+krb5tray uses a JSON configuration file located at `~/.config/ktray/ktray.json`. The file supports the following sections:
 
 ```json
 {
@@ -138,6 +138,107 @@ The `terminal` field in SSH entries is a command template with `{cmd}` as a plac
 | Windows | cmd.exe | `C:\\Windows\\System32\\cmd.exe /k {cmd}` |
 | Windows | Windows Terminal | `wt.exe {cmd}` |
 | Windows | PowerShell | `powershell.exe -NoExit -Command {cmd}` |
+
+## Lua Scripting
+
+krb5tray supports Lua scripting for custom automation. Scripts are stored in `~/.config/ktray/scripts/` and can be attached to URLs, snippets, and SSH entries via the `script` field.
+
+### Script Configuration
+
+Add a `script` field to any URL, snippet, or SSH entry:
+
+```json
+{
+  "urls": [
+    {"index": 0, "name": "API with Auth", "url": "https://api.example.com", "script": "api_auth.lua"}
+  ],
+  "snippets": [
+    {"index": 1, "name": "Dynamic Token", "value": "", "script": "gen_token.lua"}
+  ],
+  "ssh": [
+    {"index": 0, "name": "Jump Host", "command": "ssh jump@host", "terminal": "...", "script": "pre_ssh.lua"}
+  ]
+}
+```
+
+### Context Variables
+
+Scripts receive context variables via the `ctx` global table:
+
+| Entry Type | Context Variables |
+|------------|-------------------|
+| URL | `ctx.url`, `ctx.name`, `ctx.index` |
+| Snippet | `ctx.value`, `ctx.name`, `ctx.index` |
+| SSH | `ctx.command`, `ctx.terminal`, `ctx.name`, `ctx.index` |
+
+### Returning Values
+
+For snippets, set the global `result` variable to override clipboard content:
+
+```lua
+-- gen_token.lua
+local timestamp = os.time()
+result = "token-" .. timestamp
+```
+
+### Available Functions
+
+The `ktray` module provides these functions:
+
+| Function | Description | Returns |
+|----------|-------------|---------|
+| `ktray.copy(text)` | Copy text to clipboard | `true` or `false, error` |
+| `ktray.paste()` | Get text from clipboard | `string` |
+| `ktray.open_url(url)` | Open URL in browser | `true` or `false, error` |
+| `ktray.http_get(url, headers)` | HTTP GET request | `body` or `nil, error` |
+| `ktray.http_post(url, body, headers)` | HTTP POST request | `response` or `nil, error` |
+| `ktray.get_token()` | Get current Kerberos token | `token` or `nil, error` |
+| `ktray.get_spn()` | Get current SPN | `string` |
+| `ktray.exec(cmd, args...)` | Execute command | `output` or `output, error` |
+| `ktray.shell(command)` | Execute shell command | `output` or `output, error` |
+| `ktray.set_status(text)` | Set status line | - |
+| `ktray.notify(title, message)` | Show notification | - |
+| `ktray.sleep(ms)` | Pause execution | - |
+| `ktray.env(name)` | Get environment variable | `string` |
+| `ktray.log(message)` | Debug log (if debug mode on) | - |
+
+### Example Scripts
+
+**Authenticated API request:**
+```lua
+-- api_auth.lua
+local token = ktray.get_token()
+if not token then
+    ktray.set_status("No Kerberos token available")
+    return
+end
+
+local headers = {Authorization = "Negotiate " .. token}
+local body, err = ktray.http_get(ctx.url, headers)
+if err then
+    ktray.set_status("API error: " .. err)
+    return
+end
+
+ktray.copy(body)
+ktray.set_status("API response copied")
+```
+
+**Generate timestamped token:**
+```lua
+-- gen_token.lua
+local base = ctx.value or "token"
+result = base .. "-" .. os.time()
+```
+
+**Pre-SSH setup:**
+```lua
+-- pre_ssh.lua
+ktray.log("Connecting to: " .. ctx.name)
+-- Run any setup commands needed
+ktray.shell("ssh-add ~/.ssh/id_rsa 2>/dev/null")
+-- Let the default SSH behavior continue by not returning early
+```
 
 ### Setting the SPN (Alternative)
 

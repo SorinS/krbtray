@@ -17,24 +17,27 @@ type Config struct {
 
 // SnippetEntry represents a text snippet that can be copied to clipboard
 type SnippetEntry struct {
-	Index int    `json:"index"` // Numeric index for ordering/reference
-	Name  string `json:"name"`  // Display name in menu
-	Value string `json:"value"` // The value to copy to clipboard
+	Index  int    `json:"index"`            // Numeric index for ordering/reference
+	Name   string `json:"name"`             // Display name in menu
+	Value  string `json:"value"`            // The value to copy to clipboard
+	Script string `json:"script,omitempty"` // Optional Lua script to run (filename in scripts folder)
 }
 
 // URLEntry represents a URL bookmark
 type URLEntry struct {
-	Index int    `json:"index"` // Numeric index for hotkey access
-	Name  string `json:"name"`  // Display name in menu
-	URL   string `json:"url"`   // The URL to open
+	Index  int    `json:"index"`            // Numeric index for hotkey access
+	Name   string `json:"name"`             // Display name in menu
+	URL    string `json:"url"`              // The URL to open
+	Script string `json:"script,omitempty"` // Optional Lua script to run instead of opening URL
 }
 
 // SSHEntry represents an SSH connection configuration
 type SSHEntry struct {
-	Index    int    `json:"index"`    // Numeric index for hotkey access
-	Name     string `json:"name"`     // Display name in menu
-	Command  string `json:"command"`  // SSH command to execute (e.g., "ssh user@host")
-	Terminal string `json:"terminal"` // Terminal command template with {cmd} placeholder
+	Index    int    `json:"index"`            // Numeric index for hotkey access
+	Name     string `json:"name"`             // Display name in menu
+	Command  string `json:"command"`          // SSH command to execute (e.g., "ssh user@host")
+	Terminal string `json:"terminal"`         // Terminal command template with {cmd} placeholder
+	Script   string `json:"script,omitempty"` // Optional Lua script to run before/instead of SSH
 }
 
 // SecretEntry represents a CSM secret configuration
@@ -82,13 +85,28 @@ func (e *SPNEntry) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// DefaultConfigPath returns the default configuration file path
-func DefaultConfigPath() string {
+// ConfigDir returns the configuration directory path
+func ConfigDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "krb5tray.json")
+	return filepath.Join(home, ".config", "ktray")
+}
+
+// ScriptsDir returns the Lua scripts directory path
+func ScriptsDir() string {
+	return filepath.Join(ConfigDir(), "scripts")
+}
+
+// DefaultConfigPath returns the default configuration file path
+func DefaultConfigPath() string {
+	return filepath.Join(ConfigDir(), "ktray.json")
+}
+
+// ScriptPath returns the full path for a script filename
+func ScriptPath(scriptName string) string {
+	return filepath.Join(ScriptsDir(), scriptName)
 }
 
 // LoadConfig loads configuration from the specified path

@@ -7,6 +7,7 @@ require (
 	github.com/getlantern/systray v1.2.2
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/yuin/gopher-lua v1.1.1
 	golang.design/x/hotkey v0.4.1
 )
 

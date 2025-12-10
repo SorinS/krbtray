@@ -166,11 +166,7 @@ func copySnippetByIndex(num int) {
 
 	for _, snippet := range appConfig.Snippets {
 		if snippet.Index == num {
-			if err := copyToClipboard(snippet.Value); err != nil {
-				mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", snippet.Name))
-			} else {
-				mStatus.SetTitle(fmt.Sprintf("Copied: [%d] %s", num, snippet.Name))
-			}
+			executeSnippetEntry(snippet)
 			return
 		}
 	}
@@ -228,11 +224,7 @@ func openURLByIndex(num int) {
 
 	for _, url := range appConfig.URLs {
 		if url.Index == num {
-			if err := openBrowser(url.URL); err != nil {
-				mStatus.SetTitle(fmt.Sprintf("Failed to open: %s", url.Name))
-			} else {
-				mStatus.SetTitle(fmt.Sprintf("Opened: [%d] %s", num, url.Name))
-			}
+			executeURLEntry(url)
 			return
 		}
 	}
@@ -290,11 +282,7 @@ func openSSHByIndex(num int) {
 
 	for _, ssh := range appConfig.SSH {
 		if ssh.Index == num {
-			if err := openTerminal(ssh); err != nil {
-				mStatus.SetTitle(fmt.Sprintf("SSH failed: %s", ssh.Name))
-			} else {
-				mStatus.SetTitle(fmt.Sprintf("SSH: [%d] %s", num, ssh.Name))
-			}
+			executeSSHEntry(ssh)
 			return
 		}
 	}
