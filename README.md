@@ -141,103 +141,432 @@ The `terminal` field in SSH entries is a command template with `{cmd}` as a plac
 
 ## Lua Scripting
 
-krb5tray supports Lua scripting for custom automation. Scripts are stored in `~/.config/ktray/scripts/` and can be attached to URLs, snippets, and SSH entries via the `script` field.
+krb5tray supports Lua 5.1 scripting for custom automation via [gopher-lua](https://github.com/yuin/gopher-lua). Scripts are stored in `~/.config/ktray/scripts/` and can be attached to URLs, snippets, and SSH entries.
 
-### Script Configuration
+### Script Location
 
-Add a `script` field to any URL, snippet, or SSH entry:
+Scripts must be placed in the scripts directory:
+```
+~/.config/ktray/
+├── ktray.json          # Configuration file
+└── scripts/            # Lua scripts directory
+    ├── api_auth.lua
+    ├── gen_token.lua
+    └── pre_ssh.lua
+```
+
+### Attaching Scripts to Entries
+
+Add a `script` field to any URL, snippet, or SSH entry. The script filename is relative to the scripts directory:
 
 ```json
 {
   "urls": [
-    {"index": 0, "name": "API with Auth", "url": "https://api.example.com", "script": "api_auth.lua"}
+    {
+      "index": 0,
+      "name": "API with Auth",
+      "url": "https://api.example.com/data",
+      "script": "api_auth.lua"
+    }
   ],
   "snippets": [
-    {"index": 1, "name": "Dynamic Token", "value": "", "script": "gen_token.lua"}
+    {
+      "index": 1,
+      "name": "JWT Token",
+      "value": "my-secret-key",
+      "script": "gen_jwt.lua"
+    }
   ],
   "ssh": [
-    {"index": 0, "name": "Jump Host", "command": "ssh jump@host", "terminal": "...", "script": "pre_ssh.lua"}
+    {
+      "index": 0,
+      "name": "Production Server",
+      "command": "ssh admin@prod.example.com",
+      "terminal": "/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal {cmd}",
+      "script": "pre_ssh.lua"
+    }
   ]
 }
 ```
 
-### Context Variables
+### Script Behavior
 
-Scripts receive context variables via the `ctx` global table:
+When an entry with a `script` field is triggered (via menu click or hotkey):
 
-| Entry Type | Context Variables |
-|------------|-------------------|
-| URL | `ctx.url`, `ctx.name`, `ctx.index` |
-| Snippet | `ctx.value`, `ctx.name`, `ctx.index` |
-| SSH | `ctx.command`, `ctx.terminal`, `ctx.name`, `ctx.index` |
+1. The script runs **instead of** the default action
+2. Scripts receive context via the `ctx` global table
+3. For snippets: set the `result` global to specify clipboard content
+4. Scripts can call `ktray.*` functions to perform actions
 
-### Returning Values
+### Context Variables (`ctx` table)
 
-For snippets, set the global `result` variable to override clipboard content:
+Each entry type receives different context variables:
+
+**URL entries:**
+| Variable | Type | Description |
+|----------|------|-------------|
+| `ctx.url` | string | The URL from the entry |
+| `ctx.name` | string | Display name of the entry |
+| `ctx.index` | string | Index number (as string) |
+
+**Snippet entries:**
+| Variable | Type | Description |
+|----------|------|-------------|
+| `ctx.value` | string | The snippet value from config |
+| `ctx.name` | string | Display name of the entry |
+| `ctx.index` | string | Index number (as string) |
+
+**SSH entries:**
+| Variable | Type | Description |
+|----------|------|-------------|
+| `ctx.command` | string | SSH command (e.g., "ssh user@host") |
+| `ctx.terminal` | string | Terminal template with {cmd} placeholder |
+| `ctx.name` | string | Display name of the entry |
+| `ctx.index` | string | Index number (as string) |
+
+### Returning Values from Scripts
+
+**For snippet scripts:** Set the global `result` variable to specify what gets copied to clipboard:
 
 ```lua
--- gen_token.lua
-local timestamp = os.time()
-result = "token-" .. timestamp
+-- The result will be copied to clipboard
+result = "generated-value-" .. os.time()
 ```
 
-### Available Functions
+If `result` is not set or is empty, nothing is copied and the status shows "Script: <name>".
 
-The `ktray` module provides these functions:
+**For URL/SSH scripts:** No return value is used. Use `ktray.*` functions to perform actions.
 
-| Function | Description | Returns |
-|----------|-------------|---------|
-| `ktray.copy(text)` | Copy text to clipboard | `true` or `false, error` |
-| `ktray.paste()` | Get text from clipboard | `string` |
-| `ktray.open_url(url)` | Open URL in browser | `true` or `false, error` |
-| `ktray.http_get(url, headers)` | HTTP GET request | `body` or `nil, error` |
-| `ktray.http_post(url, body, headers)` | HTTP POST request | `response` or `nil, error` |
-| `ktray.get_token()` | Get current Kerberos token | `token` or `nil, error` |
-| `ktray.get_spn()` | Get current SPN | `string` |
-| `ktray.exec(cmd, args...)` | Execute command | `output` or `output, error` |
-| `ktray.shell(command)` | Execute shell command | `output` or `output, error` |
-| `ktray.set_status(text)` | Set status line | - |
-| `ktray.notify(title, message)` | Show notification | - |
-| `ktray.sleep(ms)` | Pause execution | - |
-| `ktray.env(name)` | Get environment variable | `string` |
-| `ktray.log(message)` | Debug log (if debug mode on) | - |
+### Available Functions (`ktray` module)
 
-### Example Scripts
+#### Clipboard Functions
 
-**Authenticated API request:**
 ```lua
--- api_auth.lua
-local token = ktray.get_token()
-if not token then
-    ktray.set_status("No Kerberos token available")
+-- Copy text to clipboard
+-- Returns: true on success, or false and error message on failure
+local ok, err = ktray.copy("text to copy")
+if not ok then
+    ktray.log("Copy failed: " .. err)
+end
+
+-- Get text from clipboard (currently returns empty string)
+local text = ktray.paste()
+```
+
+#### Browser Functions
+
+```lua
+-- Open URL in default browser
+-- Returns: true on success, or false and error message on failure
+local ok, err = ktray.open_url("https://example.com")
+```
+
+#### HTTP Functions
+
+```lua
+-- HTTP GET request
+-- Parameters: url (string), headers (table, optional)
+-- Returns: body (string) on success, or nil and error message on failure
+local body, err = ktray.http_get("https://api.example.com/data")
+if err then
+    ktray.set_status("GET failed: " .. err)
     return
 end
 
-local headers = {Authorization = "Negotiate " .. token}
+-- HTTP GET with custom headers
+local headers = {
+    ["Authorization"] = "Bearer token123",
+    ["Accept"] = "application/json"
+}
+local body, err = ktray.http_get("https://api.example.com/data", headers)
+
+-- HTTP POST request
+-- Parameters: url (string), body (string), headers (table, optional)
+-- Returns: response (string) on success, or nil and error message on failure
+local response, err = ktray.http_post(
+    "https://api.example.com/submit",
+    '{"key": "value"}',
+    {["Content-Type"] = "application/json"}
+)
+```
+
+#### Kerberos Functions
+
+```lua
+-- Get the current Kerberos token (base64 encoded)
+-- Returns: token (string) on success, or nil and error message if no token
+local token, err = ktray.get_token()
+if not token then
+    ktray.set_status("No Kerberos token: " .. (err or "unknown"))
+    return
+end
+
+-- Get the current SPN
+-- Returns: spn (string), may be empty if not set
+local spn = ktray.get_spn()
+```
+
+#### Shell Execution Functions
+
+```lua
+-- Execute a command with arguments
+-- Parameters: command (string), args... (strings)
+-- Returns: output (string), and optionally error message
+local output, err = ktray.exec("ls", "-la", "/tmp")
+if err then
+    ktray.log("Command failed: " .. err)
+end
+
+-- Execute a shell command (via sh -c on Unix, cmd /c on Windows)
+-- Parameters: command (string)
+-- Returns: output (string), and optionally error message
+local output, err = ktray.shell("echo $HOME && ls -la")
+```
+
+#### UI Functions
+
+```lua
+-- Set the status line text in the tray menu
+ktray.set_status("Operation completed successfully")
+
+-- Show a notification (currently updates status line)
+-- Parameters: title (string), message (string, optional)
+ktray.notify("Success", "Token copied to clipboard")
+ktray.notify("Done")  -- message is optional
+```
+
+#### Utility Functions
+
+```lua
+-- Pause execution for specified milliseconds
+ktray.sleep(1000)  -- sleep for 1 second
+
+-- Get environment variable value
+-- Returns: value (string), empty if not set
+local home = ktray.env("HOME")
+local user = ktray.env("USER")
+
+-- Log message to console (only visible when debug mode is enabled)
+ktray.log("Debug: processing request...")
+```
+
+### Complete Example Scripts
+
+#### 1. Authenticated API Request (`api_auth.lua`)
+
+Fetches data from an API using Kerberos authentication and copies the response:
+
+```lua
+-- api_auth.lua
+-- Fetch API data with Kerberos SPNEGO authentication
+-- Attach to URL entry to make authenticated requests
+
+ktray.set_status("Fetching " .. ctx.name .. "...")
+
+-- Get the current Kerberos token
+local token, err = ktray.get_token()
+if not token then
+    ktray.set_status("Error: No Kerberos token available")
+    ktray.notify("Auth Failed", "Please refresh your Kerberos ticket")
+    return
+end
+
+-- Make authenticated request
+local headers = {
+    ["Authorization"] = "Negotiate " .. token,
+    ["Accept"] = "application/json"
+}
+
 local body, err = ktray.http_get(ctx.url, headers)
 if err then
     ktray.set_status("API error: " .. err)
     return
 end
 
-ktray.copy(body)
-ktray.set_status("API response copied")
+-- Copy response to clipboard
+local ok, copy_err = ktray.copy(body)
+if ok then
+    ktray.set_status("API response copied (" .. #body .. " bytes)")
+else
+    ktray.set_status("Copy failed: " .. (copy_err or "unknown"))
+end
 ```
 
-**Generate timestamped token:**
+#### 2. Dynamic JWT Token Generator (`gen_jwt.lua`)
+
+Generates a simple JWT-like token with timestamp:
+
 ```lua
--- gen_token.lua
-local base = ctx.value or "token"
-result = base .. "-" .. os.time()
+-- gen_jwt.lua
+-- Generate a timestamped token based on the snippet value
+-- The ctx.value contains the base secret from config
+
+local secret = ctx.value
+if secret == "" then
+    secret = "default-secret"
+end
+
+-- Create timestamp
+local timestamp = os.time()
+local expires = timestamp + 3600  -- 1 hour from now
+
+-- Build a simple token (not a real JWT, just for demo)
+local token_data = string.format(
+    '{"sub":"user","iat":%d,"exp":%d,"key":"%s"}',
+    timestamp,
+    expires,
+    secret
+)
+
+-- Base64-like encoding (simple version)
+local b64 = "eyJ0eXAiOiJKV1QifQ."  -- fake header
+b64 = b64 .. token_data:gsub(".", function(c)
+    return string.format("%02x", string.byte(c))
+end)
+
+-- Set result to be copied to clipboard
+result = "Bearer " .. b64
+
+ktray.set_status("Token generated (expires in 1h)")
+ktray.log("Generated token for: " .. ctx.name)
 ```
 
-**Pre-SSH setup:**
+#### 3. Pre-SSH Setup Script (`pre_ssh.lua`)
+
+Performs setup before SSH connection (e.g., add keys, check connectivity):
+
 ```lua
 -- pre_ssh.lua
-ktray.log("Connecting to: " .. ctx.name)
--- Run any setup commands needed
+-- Run setup commands before opening SSH connection
+-- Then open the terminal with the SSH command
+
+ktray.log("Pre-SSH setup for: " .. ctx.name)
+ktray.set_status("Preparing SSH: " .. ctx.name)
+
+-- Add SSH key to agent (ignore errors if already added)
 ktray.shell("ssh-add ~/.ssh/id_rsa 2>/dev/null")
--- Let the default SSH behavior continue by not returning early
+ktray.shell("ssh-add ~/.ssh/id_ed25519 2>/dev/null")
+
+-- Extract host from command for connectivity check
+local host = ctx.command:match("@([%w%.%-]+)")
+if host then
+    ktray.log("Checking connectivity to: " .. host)
+
+    -- Quick ping test (1 packet, 2 second timeout)
+    local output, err = ktray.shell("ping -c 1 -W 2 " .. host .. " 2>&1")
+    if err then
+        ktray.set_status("Warning: " .. host .. " may be unreachable")
+        ktray.sleep(1500)  -- Show warning briefly
+    end
+end
+
+-- Now open the terminal with SSH command
+-- Replace {cmd} placeholder in terminal template
+local terminal_cmd = ctx.terminal:gsub("{cmd}", ctx.command)
+ktray.log("Executing: " .. terminal_cmd)
+
+local output, err = ktray.shell(terminal_cmd)
+if err then
+    ktray.set_status("SSH failed: " .. err)
+else
+    ktray.set_status("SSH: " .. ctx.name)
+end
+```
+
+#### 4. URL with Custom Headers (`fetch_with_headers.lua`)
+
+Opens a URL after fetching data with custom headers:
+
+```lua
+-- fetch_with_headers.lua
+-- Fetch data with custom headers, then open URL in browser
+
+ktray.set_status("Fetching data...")
+
+-- Get some data first (e.g., a session token)
+local session_url = ktray.env("SESSION_API") or "https://auth.example.com/session"
+local session, err = ktray.http_get(session_url)
+
+if err then
+    ktray.log("Could not get session: " .. err)
+    -- Continue anyway, just open the URL
+end
+
+-- Open the URL in browser
+local ok, err = ktray.open_url(ctx.url)
+if ok then
+    ktray.set_status("Opened: " .. ctx.name)
+else
+    ktray.set_status("Failed to open: " .. err)
+end
+```
+
+#### 5. Copy with Transformation (`transform_snippet.lua`)
+
+Transforms snippet value before copying:
+
+```lua
+-- transform_snippet.lua
+-- Transform the snippet value (e.g., encode, wrap, format)
+
+local value = ctx.value
+
+-- Example transformations based on snippet name
+if ctx.name:find("Base64") then
+    -- Simple hex encoding as placeholder for base64
+    result = value:gsub(".", function(c)
+        return string.format("%02x", string.byte(c))
+    end)
+    ktray.set_status("Encoded: " .. ctx.name)
+
+elseif ctx.name:find("JSON") then
+    -- Wrap in JSON
+    result = '{"value": "' .. value:gsub('"', '\\"') .. '"}'
+    ktray.set_status("JSON wrapped: " .. ctx.name)
+
+elseif ctx.name:find("Header") then
+    -- Format as HTTP header
+    result = "X-Custom-Header: " .. value
+    ktray.set_status("Header formatted: " .. ctx.name)
+
+else
+    -- Default: uppercase
+    result = value:upper()
+    ktray.set_status("Transformed: " .. ctx.name)
+end
+
+ktray.log("Original: " .. value)
+ktray.log("Result: " .. result)
+```
+
+#### 6. Environment-based URL (`env_url.lua`)
+
+Opens different URLs based on environment:
+
+```lua
+-- env_url.lua
+-- Select URL based on environment variable
+
+local env = ktray.env("APP_ENV") or "production"
+ktray.log("Current environment: " .. env)
+
+-- Build URL based on environment
+local base_url = ctx.url
+local final_url
+
+if env == "development" or env == "dev" then
+    final_url = base_url:gsub("://", "://dev.")
+    ktray.set_status("Opening DEV: " .. ctx.name)
+elseif env == "staging" then
+    final_url = base_url:gsub("://", "://staging.")
+    ktray.set_status("Opening STAGING: " .. ctx.name)
+else
+    final_url = base_url
+    ktray.set_status("Opening PROD: " .. ctx.name)
+end
+
+ktray.log("Final URL: " .. final_url)
+ktray.open_url(final_url)
 ```
 
 ### Setting the SPN (Alternative)

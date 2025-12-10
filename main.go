@@ -60,7 +60,7 @@ var (
 func main() {
 	// Ensure only one instance is running
 	if err := EnsureSingleInstance(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -69,7 +69,7 @@ func main() {
 
 	// Initialize Lua scripting engine
 	if err := InitLuaEngine(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to initialize Lua engine: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Warning: Failed to initialize Lua engine: %v\n", err)
 	}
 
 	systray.Run(onReady, onExit)
