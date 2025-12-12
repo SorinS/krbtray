@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/itchyny/gojq"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -108,6 +109,12 @@ func (e *LuaEngine) registerKtrayModule() {
 	e.state.SetField(ktray, "prompt_secret", e.state.NewFunction(luaPromptSecret))
 	e.state.SetField(ktray, "confirm", e.state.NewFunction(luaConfirm))
 
+	// HTML parsing functions
+	e.state.SetField(ktray, "html_find", e.state.NewFunction(luaHTMLFind))
+	e.state.SetField(ktray, "html_attr", e.state.NewFunction(luaHTMLAttr))
+	e.state.SetField(ktray, "html_text", e.state.NewFunction(luaHTMLText))
+	e.state.SetField(ktray, "html_val", e.state.NewFunction(luaHTMLVal))
+
 	// Register the module
 	e.state.SetGlobal("ktray", ktray)
 }
@@ -192,6 +199,12 @@ func (e *LuaEngine) registerKtrayModuleToState(L *lua.LState) {
 	L.SetField(ktray, "prompt", L.NewFunction(luaPrompt))
 	L.SetField(ktray, "prompt_secret", L.NewFunction(luaPromptSecret))
 	L.SetField(ktray, "confirm", L.NewFunction(luaConfirm))
+
+	// HTML parsing functions
+	L.SetField(ktray, "html_find", L.NewFunction(luaHTMLFind))
+	L.SetField(ktray, "html_attr", L.NewFunction(luaHTMLAttr))
+	L.SetField(ktray, "html_text", L.NewFunction(luaHTMLText))
+	L.SetField(ktray, "html_val", L.NewFunction(luaHTMLVal))
 
 	L.SetGlobal("ktray", ktray)
 }
@@ -878,5 +891,154 @@ func luaConfirm(L *lua.LState) int {
 
 	result := ConfirmDialog(title, message)
 	L.Push(lua.LBool(result))
+	return 1
+}
+
+// HTML parsing functions using goquery
+
+// luaHTMLFind parses HTML and finds elements matching a CSS selector: ktray.html_find(html, selector) -> table, error
+// Returns a table (array) of matched elements, each with methods to extract data
+// Each element in the array is a table with: text, html, attr(name), and data fields
+func luaHTMLFind(L *lua.LState) int {
+	htmlStr := L.CheckString(1)
+	selector := L.CheckString(2)
+
+	// Parse HTML
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("HTML parse error: " + err.Error()))
+		return 2
+	}
+
+	// Find elements
+	results := L.NewTable()
+	index := 1
+
+	doc.Find(selector).Each(func(i int, s *goquery.Selection) {
+		elem := L.NewTable()
+
+		// Get text content
+		L.SetField(elem, "text", lua.LString(strings.TrimSpace(s.Text())))
+
+		// Get inner HTML
+		html, _ := s.Html()
+		L.SetField(elem, "html", lua.LString(html))
+
+		// Get outer HTML
+		outerHTML, _ := goquery.OuterHtml(s)
+		L.SetField(elem, "outer_html", lua.LString(outerHTML))
+
+		// Get all attributes as a table
+		attrs := L.NewTable()
+		for _, attr := range s.Get(0).Attr {
+			L.SetField(attrs, attr.Key, lua.LString(attr.Val))
+		}
+		L.SetField(elem, "attrs", attrs)
+
+		// Add to results array
+		L.SetTable(results, lua.LNumber(index), elem)
+		index++
+	})
+
+	L.Push(results)
+	return 1
+}
+
+// luaHTMLAttr extracts an attribute value from the first matching element: ktray.html_attr(html, selector, attr_name) -> value, error
+// Convenience function for extracting a single attribute value
+func luaHTMLAttr(L *lua.LState) int {
+	htmlStr := L.CheckString(1)
+	selector := L.CheckString(2)
+	attrName := L.CheckString(3)
+
+	// Parse HTML
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("HTML parse error: " + err.Error()))
+		return 2
+	}
+
+	// Find first matching element and get attribute
+	selection := doc.Find(selector).First()
+	if selection.Length() == 0 {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("no element found matching selector: " + selector))
+		return 2
+	}
+
+	value, exists := selection.Attr(attrName)
+	if !exists {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("attribute not found: " + attrName))
+		return 2
+	}
+
+	L.Push(lua.LString(value))
+	return 1
+}
+
+// luaHTMLText extracts text content from the first matching element: ktray.html_text(html, selector) -> text, error
+// Convenience function for extracting text from a single element
+func luaHTMLText(L *lua.LState) int {
+	htmlStr := L.CheckString(1)
+	selector := L.CheckString(2)
+
+	// Parse HTML
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("HTML parse error: " + err.Error()))
+		return 2
+	}
+
+	// Find first matching element and get text
+	selection := doc.Find(selector).First()
+	if selection.Length() == 0 {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("no element found matching selector: " + selector))
+		return 2
+	}
+
+	L.Push(lua.LString(strings.TrimSpace(selection.Text())))
+	return 1
+}
+
+// luaHTMLVal extracts the value attribute from the first matching element: ktray.html_val(html, selector) -> value, error
+// Convenience function for form elements (input, select, textarea)
+func luaHTMLVal(L *lua.LState) int {
+	htmlStr := L.CheckString(1)
+	selector := L.CheckString(2)
+
+	// Parse HTML
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("HTML parse error: " + err.Error()))
+		return 2
+	}
+
+	// Find first matching element
+	selection := doc.Find(selector).First()
+	if selection.Length() == 0 {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("no element found matching selector: " + selector))
+		return 2
+	}
+
+	// Get value attribute (common for form elements)
+	value, exists := selection.Attr("value")
+	if !exists {
+		// For textarea, get text content instead
+		if goquery.NodeName(selection) == "textarea" {
+			L.Push(lua.LString(selection.Text()))
+			return 1
+		}
+		L.Push(lua.LString(""))
+		return 1
+	}
+
+	L.Push(lua.LString(value))
 	return 1
 }
