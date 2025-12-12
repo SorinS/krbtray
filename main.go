@@ -881,6 +881,7 @@ func refreshToken() {
 
 	// Cache the token for this SPN
 	GetCache().SetToken(spn, lastToken, DefaultTokenExpiration)
+	updateCacheMenu()
 
 	LogTicketRequested("(current)", true, len(token))
 
