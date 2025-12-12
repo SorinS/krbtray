@@ -390,6 +390,39 @@ local user = ktray.env("USER")
 ktray.log("Debug: processing request...")
 ```
 
+#### Cache Functions
+
+The cache allows scripts to store and retrieve values that persist across script executions. Cached values appear in the **Cache** menu and can be copied to clipboard by clicking them.
+
+```lua
+-- Store a value in cache
+-- Parameters: key (string), value (string), ttl_seconds (number, optional, default 600)
+ktray.cache_set("my_key", "my_value")           -- expires in 10 minutes (default)
+ktray.cache_set("my_key", "my_value", 3600)     -- expires in 1 hour
+ktray.cache_set("session_token", token, 1800)   -- expires in 30 minutes
+
+-- Retrieve a value from cache
+-- Returns: value (string or nil), found (boolean)
+local value, found = ktray.cache_get("my_key")
+if found then
+    ktray.log("Cached value: " .. value)
+else
+    ktray.log("Key not found in cache")
+end
+
+-- Delete a value from cache
+ktray.cache_delete("my_key")
+
+-- Get all cache keys
+-- Returns: table of key strings
+local keys = ktray.cache_keys()
+for i, key in ipairs(keys) do
+    ktray.log("Cache key: " .. key)
+end
+```
+
+**Cache Menu:** The tray menu includes a **Cache** submenu that displays all cached values. Click any entry to copy its value to the clipboard. Use "Clear Cache" to remove all entries.
+
 ### Complete Example Scripts
 
 #### 1. Authenticated API Request (`api_auth.lua`)

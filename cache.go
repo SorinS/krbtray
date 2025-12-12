@@ -181,3 +181,100 @@ func (ac *AppCache) ItemCount() int {
 func (ac *AppCache) Stats() string {
 	return fmt.Sprintf("Cache items: %d", ac.c.ItemCount())
 }
+
+// CacheEntry represents a cache entry for display
+type CacheEntry struct {
+	Key       string
+	Value     string
+	ExpiresAt time.Time
+	Type      string // "jwt", "secret", "token", or "custom"
+}
+
+// ListKeys returns all cache keys
+func (ac *AppCache) ListKeys() []string {
+	items := ac.c.Items()
+	keys := make([]string, 0, len(items))
+	for k := range items {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// ListEntries returns all cache entries with metadata
+func (ac *AppCache) ListEntries() []CacheEntry {
+	items := ac.c.Items()
+	entries := make([]CacheEntry, 0, len(items))
+
+	for k, item := range items {
+		entry := CacheEntry{
+			Key: k,
+		}
+
+		// Determine type and extract value
+		switch v := item.Object.(type) {
+		case *CachedToken:
+			entry.Value = v.Value
+			entry.ExpiresAt = v.ExpiresAt
+			if len(k) > len(PrefixToken) && k[:len(PrefixToken)] == PrefixToken {
+				entry.Type = "token"
+			} else if len(k) > len(PrefixJWT) && k[:len(PrefixJWT)] == PrefixJWT {
+				entry.Type = "jwt"
+			}
+		case *CachedSecret:
+			entry.Value = v.Value
+			entry.ExpiresAt = v.ExpiresAt
+			entry.Type = "secret"
+		case string:
+			entry.Value = v
+			entry.Type = "custom"
+			// Calculate expiry from item.Expiration (Unix nano timestamp)
+			if item.Expiration > 0 {
+				entry.ExpiresAt = time.Unix(0, item.Expiration)
+			}
+		default:
+			entry.Value = fmt.Sprintf("%v", item.Object)
+			entry.Type = "custom"
+			if item.Expiration > 0 {
+				entry.ExpiresAt = time.Unix(0, item.Expiration)
+			}
+		}
+
+		entries = append(entries, entry)
+	}
+
+	return entries
+}
+
+// GetValue retrieves any cached value as a string by its full key
+func (ac *AppCache) GetValue(key string) (string, bool) {
+	item, found := ac.c.Get(key)
+	if !found {
+		return "", false
+	}
+
+	switch v := item.(type) {
+	case *CachedToken:
+		return v.Value, true
+	case *CachedSecret:
+		return v.Value, true
+	case string:
+		return v, true
+	default:
+		return fmt.Sprintf("%v", item), true
+	}
+}
+
+// Set stores a custom string value with the given key and expiration
+func (ac *AppCache) Set(key string, value string, expiration time.Duration) {
+	ac.c.Set(key, value, expiration)
+}
+
+// Get retrieves a custom string value by key
+func (ac *AppCache) Get(key string) (string, bool) {
+	if val, found := ac.c.Get(key); found {
+		if s, ok := val.(string); ok {
+			return s, true
+		}
+	}
+	return "", false
+}

@@ -31,6 +31,7 @@ var (
 	mURLsMenu     *systray.MenuItem
 	mSnippetsMenu *systray.MenuItem
 	mSSHMenu      *systray.MenuItem
+	mCacheMenu    *systray.MenuItem
 	mCopyToken    *systray.MenuItem
 	mCopyHeader   *systray.MenuItem
 	mRefresh      *systray.MenuItem
@@ -45,6 +46,7 @@ var (
 	urlMenuItems     []*systray.MenuItem
 	snippetMenuItems []*systray.MenuItem
 	sshMenuItems     []*systray.MenuItem
+	cacheMenuItems   []*systray.MenuItem
 
 	// Data bound to menu items (used for click handling after reload)
 	spnEntries     []SPNEntry
@@ -52,6 +54,7 @@ var (
 	urlEntries     []URLEntry
 	snippetEntries []SnippetEntry
 	sshEntries     []SSHEntry
+	cacheKeys      []string
 
 	// Currently selected secret
 	currentSecret *SecretEntry
@@ -123,6 +126,10 @@ func onReady() {
 	// SSH submenu
 	mSSHMenu = systray.AddMenuItem("SSH", "Open SSH connections in terminal")
 	loadAndBuildSSHMenu()
+
+	// Cache submenu
+	mCacheMenu = systray.AddMenuItem("Cache", "View and copy cached values")
+	loadAndBuildCacheMenu()
 
 	systray.AddSeparator()
 
@@ -600,6 +607,154 @@ func executeSSHEntry(entry SSHEntry) {
 	} else {
 		LogSSHOpened(entry.Name)
 		mStatus.SetTitle(fmt.Sprintf("SSH: %s", entry.Name))
+	}
+}
+
+var mCacheClear *systray.MenuItem
+
+func loadAndBuildCacheMenu() {
+	// Pre-allocate menu items pool
+	cacheMenuItems = make([]*systray.MenuItem, maxMenuItems)
+	cacheKeys = make([]string, maxMenuItems)
+
+	for i := 0; i < maxMenuItems; i++ {
+		item := mCacheMenu.AddSubMenuItem("", "")
+		item.Hide()
+		cacheMenuItems[i] = item
+		go handleCacheClickByIndex(item, i)
+	}
+
+	// Add separator and clear button
+	mCacheMenu.AddSubMenuItem("", "")
+	mCacheClear = mCacheMenu.AddSubMenuItem("Clear Cache", "Remove all cached items")
+	go handleCacheClearClick()
+
+	// Now populate with actual data
+	updateCacheMenu()
+}
+
+func updateCacheMenu() {
+	// Hide all items first
+	for i := 0; i < maxMenuItems; i++ {
+		cacheMenuItems[i].Hide()
+		cacheKeys[i] = ""
+	}
+
+	entries := GetCache().ListEntries()
+
+	if len(entries) == 0 {
+		// Show "Cache is empty" in first slot
+		cacheMenuItems[0].SetTitle("Cache is empty")
+		cacheMenuItems[0].SetTooltip("No cached values")
+		cacheMenuItems[0].Disable()
+		cacheMenuItems[0].Show()
+		mCacheMenu.SetTitle("Cache (0)")
+		return
+	}
+
+	// Update entries and show items
+	for i, entry := range entries {
+		if i >= maxMenuItems {
+			break
+		}
+		stateMutex.Lock()
+		cacheKeys[i] = entry.Key
+		stateMutex.Unlock()
+
+		// Format display name based on type
+		displayName := formatCacheEntryName(entry)
+		tooltip := formatCacheEntryTooltip(entry)
+
+		cacheMenuItems[i].SetTitle(displayName)
+		cacheMenuItems[i].SetTooltip(tooltip)
+		cacheMenuItems[i].Enable()
+		cacheMenuItems[i].Show()
+	}
+
+	mCacheMenu.SetTitle(fmt.Sprintf("Cache (%d)", len(entries)))
+}
+
+func formatCacheEntryName(entry CacheEntry) string {
+	// Strip prefix from key for display
+	displayKey := entry.Key
+	switch entry.Type {
+	case "token":
+		displayKey = entry.Key[len(PrefixToken):]
+		return fmt.Sprintf("[token] %s", truncateString(displayKey, 30))
+	case "jwt":
+		displayKey = entry.Key[len(PrefixJWT):]
+		return fmt.Sprintf("[jwt] %s", truncateString(displayKey, 30))
+	case "secret":
+		displayKey = entry.Key[len(PrefixSecret):]
+		return fmt.Sprintf("[secret] %s", truncateString(displayKey, 30))
+	default:
+		return fmt.Sprintf("[custom] %s", truncateString(displayKey, 30))
+	}
+}
+
+func formatCacheEntryTooltip(entry CacheEntry) string {
+	valuePreview := truncateString(entry.Value, 50)
+	if !entry.ExpiresAt.IsZero() {
+		remaining := time.Until(entry.ExpiresAt)
+		if remaining > 0 {
+			return fmt.Sprintf("Value: %s... (expires in %s)", valuePreview, formatDuration(remaining))
+		}
+		return fmt.Sprintf("Value: %s... (expired)", valuePreview)
+	}
+	return fmt.Sprintf("Value: %s...", valuePreview)
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+func handleCacheClickByIndex(item *systray.MenuItem, index int) {
+	for range item.ClickedCh {
+		stateMutex.RLock()
+		key := cacheKeys[index]
+		stateMutex.RUnlock()
+
+		if key == "" {
+			continue
+		}
+
+		// Get the value and copy to clipboard
+		value, found := GetCache().GetValue(key)
+		if !found {
+			mStatus.SetTitle("Cache entry not found")
+			updateCacheMenu() // Refresh the menu
+			continue
+		}
+
+		if err := copyToClipboard(value); err != nil {
+			LogError("Failed to copy cache value: %v", err)
+			mStatus.SetTitle(fmt.Sprintf("Copy failed: %v", truncateError(err)))
+		} else {
+			LogClipboardCopy("cache", key)
+			mStatus.SetTitle(fmt.Sprintf("Copied: %s", truncateString(key, 30)))
+		}
+	}
+}
+
+func handleCacheClearClick() {
+	for range mCacheClear.ClickedCh {
+		GetCache().Clear()
+		LogAction("cache_cleared", "Cache cleared")
+		mStatus.SetTitle("Cache cleared")
+		updateCacheMenu()
 	}
 }
 

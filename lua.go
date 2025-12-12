@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -83,6 +85,17 @@ func (e *LuaEngine) registerKtrayModule() {
 	e.state.SetField(ktray, "env", e.state.NewFunction(luaEnv))
 	e.state.SetField(ktray, "log", e.state.NewFunction(luaLog))
 
+	// Cache functions
+	e.state.SetField(ktray, "cache_get", e.state.NewFunction(luaCacheGet))
+	e.state.SetField(ktray, "cache_set", e.state.NewFunction(luaCacheSet))
+	e.state.SetField(ktray, "cache_delete", e.state.NewFunction(luaCacheDelete))
+	e.state.SetField(ktray, "cache_keys", e.state.NewFunction(luaCacheKeys))
+
+	// Encoding functions
+	e.state.SetField(ktray, "base64_encode", e.state.NewFunction(luaBase64Encode))
+	e.state.SetField(ktray, "base64_decode", e.state.NewFunction(luaBase64Decode))
+	e.state.SetField(ktray, "jwt_decode", e.state.NewFunction(luaJWTDecode))
+
 	// Register the module
 	e.state.SetGlobal("ktray", ktray)
 }
@@ -145,6 +158,17 @@ func (e *LuaEngine) registerKtrayModuleToState(L *lua.LState) {
 	L.SetField(ktray, "sleep", L.NewFunction(luaSleep))
 	L.SetField(ktray, "env", L.NewFunction(luaEnv))
 	L.SetField(ktray, "log", L.NewFunction(luaLog))
+
+	// Cache functions
+	L.SetField(ktray, "cache_get", L.NewFunction(luaCacheGet))
+	L.SetField(ktray, "cache_set", L.NewFunction(luaCacheSet))
+	L.SetField(ktray, "cache_delete", L.NewFunction(luaCacheDelete))
+	L.SetField(ktray, "cache_keys", L.NewFunction(luaCacheKeys))
+
+	// Encoding functions
+	L.SetField(ktray, "base64_encode", L.NewFunction(luaBase64Encode))
+	L.SetField(ktray, "base64_decode", L.NewFunction(luaBase64Decode))
+	L.SetField(ktray, "jwt_decode", L.NewFunction(luaJWTDecode))
 
 	L.SetGlobal("ktray", ktray)
 }
@@ -343,4 +367,214 @@ func luaLog(L *lua.LState) int {
 // Helper function to check if running on Windows
 func isWindows() bool {
 	return strings.Contains(strings.ToLower(os.Getenv("OS")), "windows")
+}
+
+// Cache functions
+
+// luaCacheGet retrieves a value from cache: ktray.cache_get(key) -> value, found
+func luaCacheGet(L *lua.LState) int {
+	key := L.CheckString(1)
+
+	value, found := GetCache().Get(key)
+	if !found {
+		L.Push(lua.LNil)
+		L.Push(lua.LFalse)
+		return 2
+	}
+	L.Push(lua.LString(value))
+	L.Push(lua.LTrue)
+	return 2
+}
+
+// luaCacheSet stores a value in cache: ktray.cache_set(key, value, ttl_seconds)
+// ttl_seconds is optional, defaults to 10 minutes
+func luaCacheSet(L *lua.LState) int {
+	key := L.CheckString(1)
+	value := L.CheckString(2)
+	ttlSeconds := L.OptInt(3, 600) // Default: 10 minutes
+
+	ttl := time.Duration(ttlSeconds) * time.Second
+	GetCache().Set(key, value, ttl)
+
+	// Update the cache menu to reflect the new entry
+	updateCacheMenu()
+
+	L.Push(lua.LTrue)
+	return 1
+}
+
+// luaCacheDelete removes a value from cache: ktray.cache_delete(key)
+func luaCacheDelete(L *lua.LState) int {
+	key := L.CheckString(1)
+
+	GetCache().Delete(key)
+
+	// Update the cache menu to reflect the deletion
+	updateCacheMenu()
+
+	L.Push(lua.LTrue)
+	return 1
+}
+
+// luaCacheKeys returns all cache keys: ktray.cache_keys() -> table
+func luaCacheKeys(L *lua.LState) int {
+	keys := GetCache().ListKeys()
+
+	table := L.NewTable()
+	for i, key := range keys {
+		L.SetTable(table, lua.LNumber(i+1), lua.LString(key))
+	}
+	L.Push(table)
+	return 1
+}
+
+// Encoding functions
+
+// luaBase64Encode encodes a string to base64: ktray.base64_encode(data) -> encoded
+func luaBase64Encode(L *lua.LState) int {
+	data := L.CheckString(1)
+	encoded := base64.StdEncoding.EncodeToString([]byte(data))
+	L.Push(lua.LString(encoded))
+	return 1
+}
+
+// luaBase64Decode decodes a base64 string: ktray.base64_decode(encoded) -> data, error
+func luaBase64Decode(L *lua.LState) int {
+	encoded := L.CheckString(1)
+
+	// Try standard encoding first
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		// Try URL-safe encoding (used by JWTs)
+		decoded, err = base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil {
+			// Try with padding
+			decoded, err = base64.URLEncoding.DecodeString(encoded)
+			if err != nil {
+				L.Push(lua.LNil)
+				L.Push(lua.LString(err.Error()))
+				return 2
+			}
+		}
+	}
+
+	L.Push(lua.LString(string(decoded)))
+	return 1
+}
+
+// luaJWTDecode decodes a JWT without verification: ktray.jwt_decode(token) -> table, error
+// Returns a table with 'header', 'payload', and 'signature' fields
+// The header and payload are decoded JSON as Lua tables
+func luaJWTDecode(L *lua.LState) int {
+	token := L.CheckString(1)
+
+	// Remove "Bearer " prefix if present
+	token = strings.TrimPrefix(token, "Bearer ")
+	token = strings.TrimPrefix(token, "bearer ")
+
+	// Split JWT into parts
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("invalid JWT format: expected 3 parts separated by '.'"))
+		return 2
+	}
+
+	// Decode header
+	headerJSON, err := base64URLDecode(parts[0])
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("failed to decode header: " + err.Error()))
+		return 2
+	}
+
+	// Decode payload
+	payloadJSON, err := base64URLDecode(parts[1])
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("failed to decode payload: " + err.Error()))
+		return 2
+	}
+
+	// Parse header JSON
+	var header map[string]interface{}
+	if err := json.Unmarshal(headerJSON, &header); err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("failed to parse header JSON: " + err.Error()))
+		return 2
+	}
+
+	// Parse payload JSON
+	var payload map[string]interface{}
+	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("failed to parse payload JSON: " + err.Error()))
+		return 2
+	}
+
+	// Create result table
+	result := L.NewTable()
+
+	// Convert header to Lua table
+	headerTable := jsonToLuaTable(L, header)
+	L.SetField(result, "header", headerTable)
+
+	// Convert payload to Lua table
+	payloadTable := jsonToLuaTable(L, payload)
+	L.SetField(result, "payload", payloadTable)
+
+	// Keep signature as base64 string
+	L.SetField(result, "signature", lua.LString(parts[2]))
+
+	// Also provide raw JSON strings for convenience
+	L.SetField(result, "header_json", lua.LString(string(headerJSON)))
+	L.SetField(result, "payload_json", lua.LString(string(payloadJSON)))
+
+	L.Push(result)
+	return 1
+}
+
+// base64URLDecode decodes a base64url encoded string (used by JWTs)
+func base64URLDecode(s string) ([]byte, error) {
+	// Add padding if needed
+	switch len(s) % 4 {
+	case 2:
+		s += "=="
+	case 3:
+		s += "="
+	}
+
+	return base64.URLEncoding.DecodeString(s)
+}
+
+// jsonToLuaTable converts a Go map/slice to a Lua table
+func jsonToLuaTable(L *lua.LState, v interface{}) lua.LValue {
+	switch val := v.(type) {
+	case nil:
+		return lua.LNil
+	case bool:
+		return lua.LBool(val)
+	case float64:
+		// Check if it's an integer
+		if val == float64(int64(val)) {
+			return lua.LNumber(val)
+		}
+		return lua.LNumber(val)
+	case string:
+		return lua.LString(val)
+	case []interface{}:
+		table := L.NewTable()
+		for i, item := range val {
+			L.SetTable(table, lua.LNumber(i+1), jsonToLuaTable(L, item))
+		}
+		return table
+	case map[string]interface{}:
+		table := L.NewTable()
+		for k, item := range val {
+			L.SetField(table, k, jsonToLuaTable(L, item))
+		}
+		return table
+	default:
+		return lua.LString(fmt.Sprintf("%v", val))
+	}
 }
