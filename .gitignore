@@ -16,3 +16,4 @@ tests/jwtool.linux-amd64.bin
 tests/jwtool.linux-arm64.bin
 tests/jwtool.darwin-amd64.bin
 .claude/
+krb5tray

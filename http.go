@@ -1,19 +1,26 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 )
 
-var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
-}
+// DefaultHTTPTimeout is the default timeout for HTTP requests (30 seconds)
+const DefaultHTTPTimeout = 30 * time.Second
 
-// httpGet performs an HTTP GET request with optional headers
-func httpGet(url string, headers map[string]string) (string, error) {
-	req, err := http.NewRequest("GET", url, nil)
+// httpGet performs an HTTP GET request with optional headers and timeout
+func httpGet(url string, headers map[string]string, timeout time.Duration) (string, error) {
+	if timeout <= 0 {
+		timeout = DefaultHTTPTimeout
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return "", err
 	}
@@ -22,7 +29,7 @@ func httpGet(url string, headers map[string]string) (string, error) {
 		req.Header.Set(k, v)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -36,9 +43,16 @@ func httpGet(url string, headers map[string]string) (string, error) {
 	return string(body), nil
 }
 
-// httpPost performs an HTTP POST request with body and optional headers
-func httpPost(url string, body string, headers map[string]string) (string, error) {
-	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+// httpPost performs an HTTP POST request with body, optional headers and timeout
+func httpPost(url string, body string, headers map[string]string, timeout time.Duration) (string, error) {
+	if timeout <= 0 {
+		timeout = DefaultHTTPTimeout
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -50,7 +64,7 @@ func httpPost(url string, body string, headers map[string]string) (string, error
 		req.Header.Set(k, v)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}

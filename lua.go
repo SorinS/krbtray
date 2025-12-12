@@ -85,6 +85,7 @@ func (e *LuaEngine) registerKtrayModule() {
 	e.state.SetField(ktray, "sleep", e.state.NewFunction(luaSleep))
 	e.state.SetField(ktray, "env", e.state.NewFunction(luaEnv))
 	e.state.SetField(ktray, "log", e.state.NewFunction(luaLog))
+	e.state.SetField(ktray, "info", e.state.NewFunction(luaInfo))
 
 	// Cache functions
 	e.state.SetField(ktray, "cache_get", e.state.NewFunction(luaCacheGet))
@@ -169,6 +170,7 @@ func (e *LuaEngine) registerKtrayModuleToState(L *lua.LState) {
 	L.SetField(ktray, "sleep", L.NewFunction(luaSleep))
 	L.SetField(ktray, "env", L.NewFunction(luaEnv))
 	L.SetField(ktray, "log", L.NewFunction(luaLog))
+	L.SetField(ktray, "info", L.NewFunction(luaInfo))
 
 	// Cache functions
 	L.SetField(ktray, "cache_get", L.NewFunction(luaCacheGet))
@@ -230,10 +232,11 @@ func luaOpenURL(L *lua.LState) int {
 	return 1
 }
 
-// luaHTTPGet performs an HTTP GET request: ktray.http_get(url, headers) -> body, error
+// luaHTTPGet performs an HTTP GET request: ktray.http_get(url, headers, timeout_seconds) -> body, error
 func luaHTTPGet(L *lua.LState) int {
 	url := L.CheckString(1)
 	headersTable := L.OptTable(2, nil)
+	timeoutSec := L.OptNumber(3, 0) // 0 means use default
 
 	// Build headers map
 	headers := make(map[string]string)
@@ -243,7 +246,9 @@ func luaHTTPGet(L *lua.LState) int {
 		})
 	}
 
-	body, err := httpGet(url, headers)
+	timeout := time.Duration(timeoutSec) * time.Second
+
+	body, err := httpGet(url, headers, timeout)
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
@@ -253,11 +258,12 @@ func luaHTTPGet(L *lua.LState) int {
 	return 1
 }
 
-// luaHTTPPost performs an HTTP POST request: ktray.http_post(url, body, headers) -> response, error
+// luaHTTPPost performs an HTTP POST request: ktray.http_post(url, body, headers, timeout_seconds) -> response, error
 func luaHTTPPost(L *lua.LState) int {
 	url := L.CheckString(1)
 	body := L.CheckString(2)
 	headersTable := L.OptTable(3, nil)
+	timeoutSec := L.OptNumber(4, 0) // 0 means use default
 
 	// Build headers map
 	headers := make(map[string]string)
@@ -267,7 +273,9 @@ func luaHTTPPost(L *lua.LState) int {
 		})
 	}
 
-	response, err := httpPost(url, body, headers)
+	timeout := time.Duration(timeoutSec) * time.Second
+
+	response, err := httpPost(url, body, headers, timeout)
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
@@ -439,6 +447,13 @@ func luaEnv(L *lua.LState) int {
 func luaLog(L *lua.LState) int {
 	message := L.CheckString(1)
 	LogDebug("[Lua] %s", message)
+	return 0
+}
+
+// luaInfo prints to info log (always visible): ktray.info(message)
+func luaInfo(L *lua.LState) int {
+	message := L.CheckString(1)
+	LogInfo("[Lua] %s", message)
 	return 0
 }
 
