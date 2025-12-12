@@ -139,6 +139,46 @@ The `terminal` field in SSH entries is a command template with `{cmd}` as a plac
 | Windows | Windows Terminal | `wt.exe {cmd}` |
 | Windows | PowerShell | `powershell.exe -NoExit -Command {cmd}` |
 
+### Logging Configuration
+
+krb5tray logs to `~/.config/ktray/ktray.log` with automatic rotation. You can customize logging behavior in the config file:
+
+```json
+{
+  "logging": {
+    "max_size_mb": 10,
+    "max_backups": 7,
+    "max_age_days": 7,
+    "compress": true,
+    "to_stdout": true
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_size_mb` | int | 10 | Maximum log file size in MB before rotation |
+| `max_backups` | int | 7 | Maximum number of old log files to keep |
+| `max_age_days` | int | 7 | Maximum days to retain old log files |
+| `compress` | bool | true | Compress rotated log files (gzip) |
+| `to_stdout` | bool | true | Also write logs to stdout |
+
+**Defaults:** If the `logging` section is omitted, krb5tray uses sensible defaults (shown above).
+
+**Log Contents:**
+- **Info level (always):** Business actions (SPN selection, ticket requests, clipboard operations, URLs opened, SSH connections, script executions)
+- **Debug level (when Debug Mode enabled):** Detailed operational info (hotkey registration, terminal commands, Lua script output)
+
+**Example log output:**
+```
+2025-01-15 10:30:45 level=info msg="krb5tray starting" version=1.0.0 commit=abc12345 pid=12345
+2025-01-15 10:30:45 level=info msg="Logger initialized" max_size_mb=10 max_backups=7 max_age_days=7 compress=true to_stdout=true
+2025-01-15 10:30:46 level=info msg="Configuration loaded" spns=3 secrets=1 urls=5 snippets=10 ssh=2
+2025-01-15 10:31:02 level=info msg="Selected SPN: Production API" action=spn_selected
+2025-01-15 10:31:03 level=info msg="Ticket obtained successfully" action=ticket_request spn="Production API" token_size=1423
+2025-01-15 10:31:15 level=info msg="Copied http_header: Negotiate token" action=clipboard_copy
+```
+
 ## Lua Scripting
 
 krb5tray supports Lua 5.1 scripting for custom automation via [gopher-lua](https://github.com/yuin/gopher-lua). Scripts are stored in `~/.config/ktray/scripts/` and can be attached to URLs, snippets, and SSH entries.

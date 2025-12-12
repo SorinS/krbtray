@@ -4,7 +4,7 @@ import "fmt"
 
 const (
 	VersionMajor = 0
-	VersionMinor = 1
+	VersionMinor = 2
 	VersionPatch
 	VersionRelease = "-dev" // -dev -release etc.
 )

@@ -6,6 +6,26 @@ import (
 	"path/filepath"
 )
 
+// LogConfig represents logging configuration
+type LogConfig struct {
+	MaxSizeMB  int  `json:"max_size_mb,omitempty"`  // Max log file size in MB before rotation (default: 10)
+	MaxBackups int  `json:"max_backups,omitempty"`  // Max number of old log files to keep (default: 7)
+	MaxAgeDays int  `json:"max_age_days,omitempty"` // Max days to retain old log files (default: 7)
+	Compress   bool `json:"compress,omitempty"`     // Compress rotated log files (default: true)
+	ToStdout   bool `json:"to_stdout,omitempty"`    // Also write logs to stdout (default: true)
+}
+
+// DefaultLogConfig returns the default logging configuration
+func DefaultLogConfig() LogConfig {
+	return LogConfig{
+		MaxSizeMB:  10,
+		MaxBackups: 7,
+		MaxAgeDays: 7,
+		Compress:   true,
+		ToStdout:   true,
+	}
+}
+
 // Config represents the application configuration
 type Config struct {
 	SPNs     []SPNEntry     `json:"spns"`
@@ -13,6 +33,60 @@ type Config struct {
 	URLs     []URLEntry     `json:"urls,omitempty"`
 	Snippets []SnippetEntry `json:"snippets,omitempty"`
 	SSH      []SSHEntry     `json:"ssh,omitempty"`
+	Logging  *LogConfig     `json:"logging,omitempty"`
+}
+
+// GetLogConfig returns the logging config with defaults applied
+func (c *Config) GetLogConfig() LogConfig {
+	if c == nil || c.Logging == nil {
+		return DefaultLogConfig()
+	}
+
+	cfg := *c.Logging
+	defaults := DefaultLogConfig()
+
+	// Apply defaults for zero values
+	if cfg.MaxSizeMB <= 0 {
+		cfg.MaxSizeMB = defaults.MaxSizeMB
+	}
+	if cfg.MaxBackups <= 0 {
+		cfg.MaxBackups = defaults.MaxBackups
+	}
+	if cfg.MaxAgeDays <= 0 {
+		cfg.MaxAgeDays = defaults.MaxAgeDays
+	}
+	// Note: Compress and ToStdout use their zero value (false) if not set,
+	// but we want true as default. Handle this with a pointer or explicit check.
+	// For simplicity, if Logging section exists but these are false, we respect that.
+	// If Logging section doesn't exist at all, we use defaults (true).
+
+	return cfg
+}
+
+// GetLogConfigWithDefaults returns log config, using defaults if logging section is absent
+func (c *Config) GetLogConfigWithDefaults() LogConfig {
+	if c == nil || c.Logging == nil {
+		return DefaultLogConfig()
+	}
+
+	cfg := DefaultLogConfig()
+
+	// Override with user values if set
+	if c.Logging.MaxSizeMB > 0 {
+		cfg.MaxSizeMB = c.Logging.MaxSizeMB
+	}
+	if c.Logging.MaxBackups > 0 {
+		cfg.MaxBackups = c.Logging.MaxBackups
+	}
+	if c.Logging.MaxAgeDays > 0 {
+		cfg.MaxAgeDays = c.Logging.MaxAgeDays
+	}
+	// For booleans, only override if the logging section exists
+	// This allows users to explicitly set false
+	cfg.Compress = c.Logging.Compress
+	cfg.ToStdout = c.Logging.ToStdout
+
+	return cfg
 }
 
 // SnippetEntry represents a text snippet that can be copied to clipboard

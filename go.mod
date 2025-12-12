@@ -7,8 +7,11 @@ require (
 	github.com/getlantern/systray v1.2.2
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/sirupsen/logrus v1.9.3
 	github.com/yuin/gopher-lua v1.1.1
 	golang.design/x/hotkey v0.4.1
+	golang.org/x/sys v0.5.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
@@ -28,5 +31,4 @@ require (
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
 )

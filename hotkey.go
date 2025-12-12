@@ -7,6 +7,8 @@ import (
 	"golang.design/x/hotkey"
 )
 
+// Note: fmt is still needed for Sscanf and Sprintf for non-logging purposes
+
 var (
 	snippetHotkeys [10]*hotkey.Hotkey // Cmd+Option+0 through Cmd+Option+9
 	urlHotkeys     [10]*hotkey.Hotkey // Ctrl+Cmd+0 through Ctrl+Cmd+9
@@ -45,9 +47,7 @@ func initHotkeysAsync() {
 	for i, key := range keys {
 		hk := hotkey.New(snippetMods, key)
 		if err := hk.Register(); err != nil {
-			if debugMode {
-				fmt.Printf("Failed to register hotkey %s+%d: %v\n", snippetDesc, i, err)
-			}
+			LogDebug("Failed to register hotkey %s+%d: %v", snippetDesc, i, err)
 			continue
 		}
 		snippetHotkeys[i] = hk
@@ -67,9 +67,7 @@ func initHotkeysAsync() {
 	for i, key := range keys {
 		hk := hotkey.New(urlMods, key)
 		if err := hk.Register(); err != nil {
-			if debugMode {
-				fmt.Printf("Failed to register hotkey %s+%d: %v\n", urlDesc, i, err)
-			}
+			LogDebug("Failed to register hotkey %s+%d: %v", urlDesc, i, err)
 			continue
 		}
 		urlHotkeys[i] = hk
@@ -89,9 +87,7 @@ func initHotkeysAsync() {
 	for i, key := range keys {
 		hk := hotkey.New(sshMods, key)
 		if err := hk.Register(); err != nil {
-			if debugMode {
-				fmt.Printf("Failed to register hotkey %s+%d: %v\n", sshDesc, i, err)
-			}
+			LogDebug("Failed to register hotkey %s+%d: %v", sshDesc, i, err)
 			continue
 		}
 		sshHotkeys[i] = hk
@@ -109,11 +105,9 @@ func initHotkeysAsync() {
 		mStatus.SetTitle(fmt.Sprintf("Hotkeys: %s (snippets), %s (URLs), %s (SSH)", snippetDesc, urlDesc, sshDesc))
 	}
 
-	if debugMode {
-		fmt.Printf("Registered %d snippet hotkeys (%s+[0-9])\n", snippetCount, snippetDesc)
-		fmt.Printf("Registered %d URL hotkeys (%s+[0-9])\n", urlCount, urlDesc)
-		fmt.Printf("Registered %d SSH hotkeys (%s+[0-9])\n", sshCount, sshDesc)
-	}
+	LogDebug("Registered %d snippet hotkeys (%s+[0-9])", snippetCount, snippetDesc)
+	LogDebug("Registered %d URL hotkeys (%s+[0-9])", urlCount, urlDesc)
+	LogDebug("Registered %d SSH hotkeys (%s+[0-9])", sshCount, sshDesc)
 }
 
 // handleSnippetDigit handles Cmd+Option+N presses and accumulates digits

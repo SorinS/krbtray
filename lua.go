@@ -336,9 +336,7 @@ func luaEnv(L *lua.LState) int {
 // luaLog prints to debug log: ktray.log(message)
 func luaLog(L *lua.LState) int {
 	message := L.CheckString(1)
-	if debugMode {
-		fmt.Printf("[Lua] %s\n", message)
-	}
+	LogDebug("[Lua] %s", message)
 	return 0
 }
 

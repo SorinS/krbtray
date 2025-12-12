@@ -64,12 +64,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Try to load config early for logging settings
+	// If config doesn't exist, use defaults
+	var logCfg LogConfig
+	if cfg, err := LoadConfig(""); err == nil {
+		logCfg = cfg.GetLogConfigWithDefaults()
+	} else {
+		logCfg = DefaultLogConfig()
+	}
+
+	// Initialize logger with config
+	if err := InitLoggerWithConfig(logCfg); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Warning: Failed to initialize logger: %v\n", err)
+	}
+
+	LogStartup()
+
 	// Initialize the cache
 	InitCache()
 
 	// Initialize Lua scripting engine
 	if err := InitLuaEngine(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Warning: Failed to initialize Lua engine: %v\n", err)
+		LogWarn("Failed to initialize Lua engine: %v", err)
 	}
 
 	systray.Run(onReady, onExit)
@@ -304,6 +320,7 @@ func setSecret(entry *SecretEntry) {
 	currentSecret = entry
 	stateMutex.Unlock()
 
+	LogSecretSelected(entry.Name)
 	mSecretsMenu.SetTitle(fmt.Sprintf("Secret: %s", entry.Name))
 	mStatus.SetTitle(fmt.Sprintf("Selected: %s", entry.Name))
 }
@@ -376,8 +393,10 @@ func executeURLEntry(entry URLEntry) {
 			}
 			_, err := engine.RunScript(entry.Script, ctx)
 			if err != nil {
+				LogScriptExecuted(entry.Script, "url", false)
 				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
 			} else {
+				LogScriptExecuted(entry.Script, "url", true)
 				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
 			}
 			return
@@ -386,8 +405,10 @@ func executeURLEntry(entry URLEntry) {
 
 	// Default behavior: open URL in browser
 	if err := openBrowser(entry.URL); err != nil {
+		LogError("Failed to open URL %s: %v", entry.Name, err)
 		mStatus.SetTitle(fmt.Sprintf("Failed to open: %s", entry.Name))
 	} else {
+		LogURLOpened(entry.Name)
 		mStatus.SetTitle(fmt.Sprintf("Opened: %s", entry.Name))
 	}
 }
@@ -464,15 +485,19 @@ func executeSnippetEntry(entry SnippetEntry) {
 			}
 			result, err := engine.RunScript(entry.Script, ctx)
 			if err != nil {
+				LogScriptExecuted(entry.Script, "snippet", false)
 				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
 			} else if result != "" {
+				LogScriptExecuted(entry.Script, "snippet", true)
 				// If script returns a result, copy that to clipboard
 				if err := copyToClipboard(result); err != nil {
 					mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
 				} else {
+					LogClipboardCopy("snippet", entry.Name)
 					mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
 				}
 			} else {
+				LogScriptExecuted(entry.Script, "snippet", true)
 				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
 			}
 			return
@@ -481,8 +506,10 @@ func executeSnippetEntry(entry SnippetEntry) {
 
 	// Default behavior: copy value to clipboard
 	if err := copyToClipboard(entry.Value); err != nil {
+		LogError("Failed to copy snippet %s: %v", entry.Name, err)
 		mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
 	} else {
+		LogClipboardCopy("snippet", entry.Name)
 		mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
 	}
 }
@@ -556,8 +583,10 @@ func executeSSHEntry(entry SSHEntry) {
 			}
 			_, err := engine.RunScript(entry.Script, ctx)
 			if err != nil {
+				LogScriptExecuted(entry.Script, "ssh", false)
 				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
 			} else {
+				LogScriptExecuted(entry.Script, "ssh", true)
 				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
 			}
 			return
@@ -566,13 +595,17 @@ func executeSSHEntry(entry SSHEntry) {
 
 	// Default behavior: open terminal with SSH command
 	if err := openTerminal(entry); err != nil {
+		LogError("Failed to open SSH %s: %v", entry.Name, err)
 		mStatus.SetTitle(fmt.Sprintf("SSH failed: %s", entry.Name))
 	} else {
+		LogSSHOpened(entry.Name)
 		mStatus.SetTitle(fmt.Sprintf("SSH: %s", entry.Name))
 	}
 }
 
 func onExit() {
+	LogShutdown()
+
 	// Cleanup hotkeys
 	CleanupHotkeys()
 
@@ -608,6 +641,7 @@ func handleMenuClicks() {
 func reloadConfig() {
 	cfg, err := LoadConfig("")
 	if err != nil {
+		LogError("Config reload failed: %v", err)
 		mStatus.SetTitle(fmt.Sprintf("Config error: %v", truncateError(err)))
 		return
 	}
@@ -620,6 +654,7 @@ func reloadConfig() {
 	updateSnippetsMenu()
 	updateSSHMenu()
 
+	LogConfigLoaded(len(cfg.SPNs), len(cfg.Secrets), len(cfg.URLs), len(cfg.Snippets), len(cfg.SSH))
 	mStatus.SetTitle(fmt.Sprintf("Config reloaded (%d SPNs, %d snippets, %d SSH)", len(cfg.SPNs), len(cfg.Snippets), len(cfg.SSH)))
 }
 
@@ -647,6 +682,8 @@ func setSPN(spn string, displayName string) {
 	currentSPN = spn
 	stateMutex.Unlock()
 
+	LogSPNSelected(displayName)
+
 	if displayName != "" {
 		mSPNMenu.SetTitle(fmt.Sprintf("SPN: %s", displayName))
 	} else {
@@ -668,11 +705,13 @@ func refreshToken() {
 		return
 	}
 
+	LogDebug("Requesting ticket for SPN")
 	mStatus.SetTitle("Requesting ticket...")
 
 	// Get the service ticket
 	token, err := getServiceTicket(spn)
 	if err != nil {
+		LogTicketRequested("(current)", false, 0)
 		mStatus.SetTitle(fmt.Sprintf("Error: %v", truncateError(err)))
 		mCopyHeader.Disable()
 		mCopyToken.Disable()
@@ -687,6 +726,8 @@ func refreshToken() {
 
 	// Cache the token for this SPN
 	GetCache().SetToken(spn, lastToken, DefaultTokenExpiration)
+
+	LogTicketRequested("(current)", true, len(token))
 
 	// Update UI
 	mStatus.SetTitle(fmt.Sprintf("Ticket OK (%d bytes) - %s", len(token), lastTokenTime.Format("15:04:05")))
@@ -730,9 +771,11 @@ func copyHTTPHeader() {
 
 	header := "Negotiate " + token
 	if err := copyToClipboard(header); err != nil {
+		LogError("Failed to copy HTTP header: %v", err)
 		mStatus.SetTitle(fmt.Sprintf("Copy failed: %v", err))
 		return
 	}
+	LogClipboardCopy("http_header", "Negotiate token")
 	mStatus.SetTitle("Copied HTTP header to clipboard")
 }
 
@@ -746,9 +789,11 @@ func copyToken() {
 	}
 
 	if err := copyToClipboard(token); err != nil {
+		LogError("Failed to copy token: %v", err)
 		mStatus.SetTitle(fmt.Sprintf("Copy failed: %v", err))
 		return
 	}
+	LogClipboardCopy("token", "Base64 token")
 	mStatus.SetTitle("Copied token to clipboard")
 }
 
@@ -760,6 +805,7 @@ func toggleDebug() {
 		mDebug.Uncheck()
 	}
 	SetDebugMode(debugMode)
+	SetLogLevel(debugMode)
 }
 
 func truncateError(err error) string {

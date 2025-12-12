@@ -23,9 +23,7 @@ func openTerminal(entry SSHEntry) error {
 	// Replace {cmd} placeholder with the actual SSH command
 	cmdLine := strings.Replace(entry.Terminal, "{cmd}", entry.Command, -1)
 
-	if debugMode {
-		fmt.Printf("Opening terminal: %s\n", cmdLine)
-	}
+	LogDebug("Opening terminal: %s", cmdLine)
 
 	// Parse the command line into executable and arguments
 	args := parseCommandLine(cmdLine)
