@@ -82,10 +82,9 @@ func onReady() {
 	systray.SetTitle("") // No text, just the icon
 	systray.SetTooltip("Kerberos Service Ticket Tool")
 
-	// Status display as submenu
+	// Status display as submenu (kept enabled for better contrast)
 	mStatusMenu := systray.AddMenuItem("Status", "Current status")
 	mStatus = mStatusMenu.AddSubMenuItem("Ready", "")
-	mStatus.Disable()
 
 	systray.AddSeparator()
 
@@ -129,36 +128,25 @@ func onReady() {
 
 	systray.AddSeparator()
 
-	// Hotkeys submenu showing keyboard shortcuts
+	// Hotkeys submenu showing keyboard shortcuts (kept enabled for better contrast)
 	mHotkeys := systray.AddMenuItem("Hotkeys", "Keyboard shortcuts")
-	snippetMods, snippetDesc := getSnippetHotkeyModifiers()
-	urlMods, urlDesc := getURLHotkeyModifiers()
-	sshMods, sshDesc := getSSHHotkeyModifiers()
-	// Avoid unused variable errors
-	_ = snippetMods
-	_ = urlMods
-	_ = sshMods
+	_, snippetDesc := getSnippetHotkeyModifiers()
+	_, urlDesc := getURLHotkeyModifiers()
+	_, sshDesc := getSSHHotkeyModifiers()
 
-	mHotkeySnippets := mHotkeys.AddSubMenuItem(fmt.Sprintf("Snippets: %s+[0-9]", snippetDesc), "Copy snippet to clipboard")
-	mHotkeySnippets.Disable()
-	mHotkeyURLs := mHotkeys.AddSubMenuItem(fmt.Sprintf("URLs: %s+[0-9]", urlDesc), "Open URL in browser")
-	mHotkeyURLs.Disable()
-	mHotkeySSH := mHotkeys.AddSubMenuItem(fmt.Sprintf("SSH: %s+[0-9]", sshDesc), "Open SSH connection in terminal")
-	mHotkeySSH.Disable()
+	_ = mHotkeys.AddSubMenuItem(fmt.Sprintf("Snippets: %s+[0-9]", snippetDesc), "Copy snippet to clipboard")
+	_ = mHotkeys.AddSubMenuItem(fmt.Sprintf("URLs: %s+[0-9]", urlDesc), "Open URL in browser")
+	_ = mHotkeys.AddSubMenuItem(fmt.Sprintf("SSH: %s+[0-9]", sshDesc), "Open SSH connection in terminal")
 	mHotkeys.AddSubMenuItem("", "")
-	mHotkeyNote := mHotkeys.AddSubMenuItem("Hold modifiers, press digits", "Multi-digit: 1 sec timeout")
-	mHotkeyNote.Disable()
+	_ = mHotkeys.AddSubMenuItem("Hold modifiers, press digits", "Multi-digit: 1 sec timeout")
 
 	systray.AddSeparator()
 
-	// About submenu with version info
+	// About submenu with version info (kept enabled for better contrast)
 	mAbout = systray.AddMenuItem("About", "About krb5tray")
-	mAboutVersion := mAbout.AddSubMenuItem(fmt.Sprintf("Version: %s", Version), "")
-	mAboutVersion.Disable()
-	mAboutCommit := mAbout.AddSubMenuItem(fmt.Sprintf("Commit: %s", getShortCommit()), "")
-	mAboutCommit.Disable()
-	mAboutBuild := mAbout.AddSubMenuItem(fmt.Sprintf("Build: %s", buildDate), "")
-	mAboutBuild.Disable()
+	_ = mAbout.AddSubMenuItem(fmt.Sprintf("Version: %s", Version), "")
+	_ = mAbout.AddSubMenuItem(fmt.Sprintf("Commit: %s", getShortCommit()), "")
+	_ = mAbout.AddSubMenuItem(fmt.Sprintf("Build: %s", buildDate), "")
 
 	systray.AddSeparator()
 
