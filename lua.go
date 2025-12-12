@@ -232,11 +232,12 @@ func luaOpenURL(L *lua.LState) int {
 	return 1
 }
 
-// luaHTTPGet performs an HTTP GET request: ktray.http_get(url, headers, timeout_seconds) -> body, error
+// luaHTTPGet performs an HTTP GET request: ktray.http_get(url, headers, timeout_seconds, skip_verify) -> body, error
 func luaHTTPGet(L *lua.LState) int {
 	url := L.CheckString(1)
 	headersTable := L.OptTable(2, nil)
-	timeoutSec := L.OptNumber(3, 0) // 0 means use default
+	timeoutSec := L.OptNumber(3, 0)    // 0 means use default
+	skipVerify := L.OptBool(4, false)  // Skip TLS certificate verification
 
 	// Build headers map
 	headers := make(map[string]string)
@@ -248,7 +249,7 @@ func luaHTTPGet(L *lua.LState) int {
 
 	timeout := time.Duration(timeoutSec) * time.Second
 
-	body, err := httpGet(url, headers, timeout)
+	body, err := httpGet(url, headers, timeout, skipVerify)
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
@@ -258,12 +259,13 @@ func luaHTTPGet(L *lua.LState) int {
 	return 1
 }
 
-// luaHTTPPost performs an HTTP POST request: ktray.http_post(url, body, headers, timeout_seconds) -> response, error
+// luaHTTPPost performs an HTTP POST request: ktray.http_post(url, body, headers, timeout_seconds, skip_verify) -> response, error
 func luaHTTPPost(L *lua.LState) int {
 	url := L.CheckString(1)
 	body := L.CheckString(2)
 	headersTable := L.OptTable(3, nil)
-	timeoutSec := L.OptNumber(4, 0) // 0 means use default
+	timeoutSec := L.OptNumber(4, 0)    // 0 means use default
+	skipVerify := L.OptBool(5, false)  // Skip TLS certificate verification
 
 	// Build headers map
 	headers := make(map[string]string)
@@ -275,7 +277,7 @@ func luaHTTPPost(L *lua.LState) int {
 
 	timeout := time.Duration(timeoutSec) * time.Second
 
-	response, err := httpPost(url, body, headers, timeout)
+	response, err := httpPost(url, body, headers, timeout, skipVerify)
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))

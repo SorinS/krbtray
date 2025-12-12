@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"strings"
@@ -11,8 +12,15 @@ import (
 // DefaultHTTPTimeout is the default timeout for HTTP requests (30 seconds)
 const DefaultHTTPTimeout = 30 * time.Second
 
-// httpGet performs an HTTP GET request with optional headers and timeout
-func httpGet(url string, headers map[string]string, timeout time.Duration) (string, error) {
+// insecureClient is an HTTP client that skips TLS certificate verification
+var insecureClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	},
+}
+
+// httpGet performs an HTTP GET request with optional headers, timeout, and skip_verify
+func httpGet(url string, headers map[string]string, timeout time.Duration, skipVerify bool) (string, error) {
 	if timeout <= 0 {
 		timeout = DefaultHTTPTimeout
 	}
@@ -29,7 +37,12 @@ func httpGet(url string, headers map[string]string, timeout time.Duration) (stri
 		req.Header.Set(k, v)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := http.DefaultClient
+	if skipVerify {
+		client = insecureClient
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -43,8 +56,8 @@ func httpGet(url string, headers map[string]string, timeout time.Duration) (stri
 	return string(body), nil
 }
 
-// httpPost performs an HTTP POST request with body, optional headers and timeout
-func httpPost(url string, body string, headers map[string]string, timeout time.Duration) (string, error) {
+// httpPost performs an HTTP POST request with body, optional headers, timeout, and skip_verify
+func httpPost(url string, body string, headers map[string]string, timeout time.Duration, skipVerify bool) (string, error) {
 	if timeout <= 0 {
 		timeout = DefaultHTTPTimeout
 	}
@@ -64,7 +77,12 @@ func httpPost(url string, body string, headers map[string]string, timeout time.D
 		req.Header.Set(k, v)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := http.DefaultClient
+	if skipVerify {
+		client = insecureClient
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
