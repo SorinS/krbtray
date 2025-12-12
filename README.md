@@ -423,6 +423,188 @@ end
 
 **Cache Menu:** The tray menu includes a **Cache** submenu that displays all cached values. Click any entry to copy its value to the clipboard. Use "Clear Cache" to remove all entries.
 
+#### Encoding Functions
+
+```lua
+-- Base64 encode a string
+-- Returns: encoded string
+local encoded = ktray.base64_encode("Hello World")
+-- Result: "SGVsbG8gV29ybGQ="
+
+-- Base64 decode a string
+-- Returns: decoded string, or nil and error message
+-- Automatically handles standard, URL-safe, and raw base64 encodings
+local decoded, err = ktray.base64_decode("SGVsbG8gV29ybGQ=")
+if decoded then
+    ktray.log("Decoded: " .. decoded)
+else
+    ktray.log("Decode error: " .. err)
+end
+```
+
+#### JWT Functions
+
+```lua
+-- Decode a JWT token (without signature verification)
+-- Parameters: token (string) - can include "Bearer " prefix
+-- Returns: table with decoded parts, or nil and error message
+local jwt, err = ktray.jwt_decode("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c")
+
+if not jwt then
+    ktray.log("JWT decode error: " .. err)
+    return
+end
+
+-- Access header claims (alg, typ, kid, etc.)
+ktray.log("Algorithm: " .. jwt.header.alg)    -- "HS256"
+ktray.log("Type: " .. jwt.header.typ)          -- "JWT"
+
+-- Access payload claims (sub, iat, exp, name, email, etc.)
+ktray.log("Subject: " .. jwt.payload.sub)      -- "1234567890"
+ktray.log("Name: " .. jwt.payload.name)        -- "John Doe"
+ktray.log("Issued at: " .. jwt.payload.iat)    -- 1516239022
+
+-- Check token expiration
+if jwt.payload.exp then
+    local now = os.time()
+    if now > jwt.payload.exp then
+        ktray.set_status("Token expired!")
+    else
+        local remaining = jwt.payload.exp - now
+        ktray.log("Token expires in " .. remaining .. " seconds")
+    end
+end
+
+-- Access raw JSON strings if needed
+ktray.log("Header JSON: " .. jwt.header_json)
+ktray.log("Payload JSON: " .. jwt.payload_json)
+
+-- Signature is available as base64 string
+ktray.log("Signature: " .. jwt.signature)
+```
+
+**JWT Return Table Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `header` | table | Decoded header as Lua table (alg, typ, kid, etc.) |
+| `payload` | table | Decoded payload as Lua table (sub, iat, exp, etc.) |
+| `signature` | string | Base64-encoded signature |
+| `header_json` | string | Raw header JSON string |
+| `payload_json` | string | Raw payload JSON string |
+
+**Note:** `jwt_decode` does NOT verify the signature - it only decodes and parses the token. Use this for reading token claims, not for security validation.
+
+#### JSON Processing Functions
+
+krb5tray includes powerful JSON processing capabilities using [gojq](https://github.com/itchyny/gojq), a pure Go implementation of jq.
+
+```lua
+-- Parse JSON string into a Lua table
+-- Returns: table, or nil and error message
+local data, err = ktray.json_parse('{"name": "John", "age": 30, "tags": ["admin", "user"]}')
+if data then
+    ktray.log("Name: " .. data.name)         -- "John"
+    ktray.log("Age: " .. data.age)            -- 30
+    ktray.log("First tag: " .. data.tags[1])  -- "admin"
+end
+
+-- Encode a Lua table to JSON string
+-- Parameters: value (any), pretty (boolean, optional, default false)
+-- Returns: json_string, or nil and error message
+local json_str = ktray.json_encode({name = "John", age = 30})
+-- Result: '{"age":30,"name":"John"}'
+
+-- Pretty-printed JSON
+local pretty_json = ktray.json_encode({name = "John", age = 30}, true)
+-- Result:
+-- {
+--   "age": 30,
+--   "name": "John"
+-- }
+```
+
+**jq Query Function:**
+
+```lua
+-- Execute a jq query on JSON data
+-- Parameters: json_string (string), query (string)
+-- Returns: result (table/string/number/boolean/nil), or nil and error message
+-- Uses full jq syntax - see https://jqlang.github.io/jq/manual/
+
+local json_data = '{"users": [{"name": "Alice", "role": "admin"}, {"name": "Bob", "role": "user"}]}'
+
+-- Extract a single field
+local users = ktray.jq(json_data, '.users')
+-- Result: table with 2 user objects
+
+-- Get first user's name
+local name = ktray.jq(json_data, '.users[0].name')
+-- Result: "Alice"
+
+-- Filter array elements
+local admins = ktray.jq(json_data, '.users[] | select(.role == "admin")')
+-- Result: {name = "Alice", role = "admin"}
+
+-- Extract all names
+local names = ktray.jq(json_data, '.users[].name')
+-- Result: {"Alice", "Bob"}
+
+-- Complex transformations
+local result = ktray.jq(json_data, '.users | map({user: .name, is_admin: (.role == "admin")})')
+-- Result: [{user: "Alice", is_admin: true}, {user: "Bob", is_admin: false}]
+
+-- Arithmetic and string operations
+local count = ktray.jq(json_data, '.users | length')
+-- Result: 2
+
+-- Conditional expressions
+local status = ktray.jq('{"count": 5}', 'if .count > 3 then "many" else "few" end')
+-- Result: "many"
+```
+
+**Common jq Patterns:**
+
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| `.field` | Access object field | `.name` → `"John"` |
+| `.field1.field2` | Nested field access | `.user.email` |
+| `.[n]` | Array index (0-based) | `.[0]` → first element |
+| `.[]` | Iterate array elements | `.users[]` |
+| `\| filter` | Pipe to filter | `.[] \| .name` |
+| `select(cond)` | Filter by condition | `select(.age > 18)` |
+| `map(expr)` | Transform each element | `map(.name)` |
+| `length` | Array/string length | `.items \| length` |
+| `keys` | Get object keys | `keys` → `["a", "b"]` |
+| `has(key)` | Check if key exists | `has("name")` |
+| `type` | Get value type | `type` → `"object"` |
+| `@base64` | Base64 encode | `.token \| @base64` |
+| `@uri` | URL encode | `.query \| @uri` |
+
+**Practical Example - API Response Processing:**
+
+```lua
+-- fetch_and_process.lua
+-- Fetch API data and extract specific fields using jq
+
+local response, err = ktray.http_get(ctx.url)
+if err then
+    ktray.set_status("API error: " .. err)
+    return
+end
+
+-- Extract just the data we need
+local items = ktray.jq(response, '.data.items[] | {id: .id, name: .name, status: .status}')
+if not items then
+    ktray.set_status("No items found")
+    return
+end
+
+-- Convert back to JSON for clipboard
+result = ktray.json_encode(items, true)
+ktray.set_status("Extracted " .. #items .. " items")
+```
+
 ### Complete Example Scripts
 
 #### 1. Authenticated API Request (`api_auth.lua`)

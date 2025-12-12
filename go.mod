@@ -5,12 +5,13 @@ go 1.25.4
 require (
 	github.com/alexbrainman/sspi v0.0.0-20250919150558-7d374ff0d59e
 	github.com/getlantern/systray v1.2.2
+	github.com/itchyny/gojq v0.12.18
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/sirupsen/logrus v1.9.3
 	github.com/yuin/gopher-lua v1.1.1
 	golang.design/x/hotkey v0.4.1
-	golang.org/x/sys v0.5.0
+	golang.org/x/sys v0.38.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -23,6 +24,7 @@ require (
 	github.com/getlantern/ops v0.0.0-20190325191751-d70cb0d6f85f // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
+	github.com/itchyny/timefmt-go v0.1.7 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect

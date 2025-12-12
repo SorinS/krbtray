@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/itchyny/gojq"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -96,6 +97,11 @@ func (e *LuaEngine) registerKtrayModule() {
 	e.state.SetField(ktray, "base64_decode", e.state.NewFunction(luaBase64Decode))
 	e.state.SetField(ktray, "jwt_decode", e.state.NewFunction(luaJWTDecode))
 
+	// JSON processing functions
+	e.state.SetField(ktray, "jq", e.state.NewFunction(luaJQ))
+	e.state.SetField(ktray, "json_parse", e.state.NewFunction(luaJSONParse))
+	e.state.SetField(ktray, "json_encode", e.state.NewFunction(luaJSONEncode))
+
 	// Register the module
 	e.state.SetGlobal("ktray", ktray)
 }
@@ -169,6 +175,11 @@ func (e *LuaEngine) registerKtrayModuleToState(L *lua.LState) {
 	L.SetField(ktray, "base64_encode", L.NewFunction(luaBase64Encode))
 	L.SetField(ktray, "base64_decode", L.NewFunction(luaBase64Decode))
 	L.SetField(ktray, "jwt_decode", L.NewFunction(luaJWTDecode))
+
+	// JSON processing functions
+	L.SetField(ktray, "jq", L.NewFunction(luaJQ))
+	L.SetField(ktray, "json_parse", L.NewFunction(luaJSONParse))
+	L.SetField(ktray, "json_encode", L.NewFunction(luaJSONEncode))
 
 	L.SetGlobal("ktray", ktray)
 }
@@ -576,5 +587,174 @@ func jsonToLuaTable(L *lua.LState, v interface{}) lua.LValue {
 		return table
 	default:
 		return lua.LString(fmt.Sprintf("%v", val))
+	}
+}
+
+// JSON processing functions
+
+// luaJQ executes a jq query on JSON data: ktray.jq(json_string, query) -> result, error
+// Uses gojq for full jq compatibility
+// Returns the result as a Lua value (table, string, number, boolean, or nil)
+func luaJQ(L *lua.LState) int {
+	jsonStr := L.CheckString(1)
+	queryStr := L.CheckString(2)
+
+	// Parse the jq query
+	query, err := gojq.Parse(queryStr)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("jq parse error: " + err.Error()))
+		return 2
+	}
+
+	// Parse the JSON input
+	var input interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &input); err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("JSON parse error: " + err.Error()))
+		return 2
+	}
+
+	// Execute the query
+	iter := query.Run(input)
+
+	// Collect all results
+	var results []interface{}
+	for {
+		v, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if err, isErr := v.(error); isErr {
+			L.Push(lua.LNil)
+			L.Push(lua.LString("jq error: " + err.Error()))
+			return 2
+		}
+		results = append(results, v)
+	}
+
+	// Return results
+	if len(results) == 0 {
+		L.Push(lua.LNil)
+		return 1
+	} else if len(results) == 1 {
+		// Single result - return as appropriate Lua type
+		L.Push(jsonToLuaTable(L, results[0]))
+		return 1
+	} else {
+		// Multiple results - return as array
+		L.Push(jsonToLuaTable(L, results))
+		return 1
+	}
+}
+
+// luaJSONParse parses a JSON string into a Lua table: ktray.json_parse(json_string) -> table, error
+func luaJSONParse(L *lua.LState) int {
+	jsonStr := L.CheckString(1)
+
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("JSON parse error: " + err.Error()))
+		return 2
+	}
+
+	L.Push(jsonToLuaTable(L, data))
+	return 1
+}
+
+// luaJSONEncode encodes a Lua table to JSON string: ktray.json_encode(table, pretty) -> json_string, error
+// If pretty is true, the output is indented for readability
+func luaJSONEncode(L *lua.LState) int {
+	value := L.CheckAny(1)
+	pretty := L.OptBool(2, false)
+
+	// Convert Lua value to Go interface
+	goValue := luaToGoValue(L, value)
+
+	var jsonBytes []byte
+	var err error
+
+	if pretty {
+		jsonBytes, err = json.MarshalIndent(goValue, "", "  ")
+	} else {
+		jsonBytes, err = json.Marshal(goValue)
+	}
+
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("JSON encode error: " + err.Error()))
+		return 2
+	}
+
+	L.Push(lua.LString(string(jsonBytes)))
+	return 1
+}
+
+// luaToGoValue converts a Lua value to a Go interface{}
+func luaToGoValue(L *lua.LState, lv lua.LValue) interface{} {
+	switch v := lv.(type) {
+	case *lua.LNilType:
+		return nil
+	case lua.LBool:
+		return bool(v)
+	case lua.LNumber:
+		// Check if it's an integer
+		f := float64(v)
+		if f == float64(int64(f)) {
+			return int64(f)
+		}
+		return f
+	case lua.LString:
+		return string(v)
+	case *lua.LTable:
+		// Determine if it's an array or object
+		// Array: consecutive integer keys starting from 1
+		// Object: string keys
+		maxIndex := 0
+		hasStringKeys := false
+
+		v.ForEach(func(key, _ lua.LValue) {
+			if keyNum, ok := key.(lua.LNumber); ok {
+				idx := int(keyNum)
+				if idx > maxIndex {
+					maxIndex = idx
+				}
+			} else {
+				hasStringKeys = true
+			}
+		})
+
+		// If no string keys and has sequential integers, treat as array
+		if !hasStringKeys && maxIndex > 0 {
+			arr := make([]interface{}, maxIndex)
+			v.ForEach(func(key, val lua.LValue) {
+				if keyNum, ok := key.(lua.LNumber); ok {
+					idx := int(keyNum) - 1 // Lua arrays are 1-indexed
+					if idx >= 0 && idx < maxIndex {
+						arr[idx] = luaToGoValue(L, val)
+					}
+				}
+			})
+			return arr
+		}
+
+		// Otherwise, treat as object
+		obj := make(map[string]interface{})
+		v.ForEach(func(key, val lua.LValue) {
+			keyStr := ""
+			switch k := key.(type) {
+			case lua.LString:
+				keyStr = string(k)
+			case lua.LNumber:
+				keyStr = fmt.Sprintf("%v", float64(k))
+			default:
+				keyStr = key.String()
+			}
+			obj[keyStr] = luaToGoValue(L, val)
+		})
+		return obj
+	default:
+		return lv.String()
 	}
 }
