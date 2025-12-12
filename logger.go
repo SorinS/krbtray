@@ -202,17 +202,19 @@ func LogSSHOpened(name string) {
 }
 
 // LogScriptExecuted logs when a Lua script is executed
-func LogScriptExecuted(scriptName string, entryType string, success bool) {
+func LogScriptExecuted(scriptName string, entryType string, err error) {
 	status := "success"
-	if !success {
-		status = "failed"
-	}
-	log.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"action":     "script_executed",
 		"script":     scriptName,
 		"entry_type": entryType,
-		"status":     status,
-	}).Info(fmt.Sprintf("Script executed: %s", scriptName))
+	}
+	if err != nil {
+		status = "failed"
+		fields["error"] = err.Error()
+	}
+	fields["status"] = status
+	log.WithFields(fields).Info(fmt.Sprintf("Script executed: %s", scriptName))
 }
 
 // LogHotkeyTriggered logs when a hotkey is triggered

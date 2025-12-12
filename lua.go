@@ -102,6 +102,11 @@ func (e *LuaEngine) registerKtrayModule() {
 	e.state.SetField(ktray, "json_parse", e.state.NewFunction(luaJSONParse))
 	e.state.SetField(ktray, "json_encode", e.state.NewFunction(luaJSONEncode))
 
+	// User input functions
+	e.state.SetField(ktray, "prompt", e.state.NewFunction(luaPrompt))
+	e.state.SetField(ktray, "prompt_secret", e.state.NewFunction(luaPromptSecret))
+	e.state.SetField(ktray, "confirm", e.state.NewFunction(luaConfirm))
+
 	// Register the module
 	e.state.SetGlobal("ktray", ktray)
 }
@@ -180,6 +185,11 @@ func (e *LuaEngine) registerKtrayModuleToState(L *lua.LState) {
 	L.SetField(ktray, "jq", L.NewFunction(luaJQ))
 	L.SetField(ktray, "json_parse", L.NewFunction(luaJSONParse))
 	L.SetField(ktray, "json_encode", L.NewFunction(luaJSONEncode))
+
+	// User input functions
+	L.SetField(ktray, "prompt", L.NewFunction(luaPrompt))
+	L.SetField(ktray, "prompt_secret", L.NewFunction(luaPromptSecret))
+	L.SetField(ktray, "confirm", L.NewFunction(luaConfirm))
 
 	L.SetGlobal("ktray", ktray)
 }
@@ -267,18 +277,75 @@ func luaHTTPPost(L *lua.LState) int {
 	return 1
 }
 
-// luaGetToken gets the current Kerberos token: ktray.get_token() -> token, error
+// luaGetToken gets a Kerberos token: ktray.get_token(spn_name) -> token, error
+// If spn_name is provided, it looks up the SPN from config by name and requests a token for it
+// If spn_name is not provided, it returns the current cached token
 func luaGetToken(L *lua.LState) int {
+	spnName := L.OptString(1, "")
+
+	// If no SPN name provided, return the current token
+	if spnName == "" {
+		stateMutex.RLock()
+		token := lastToken
+		stateMutex.RUnlock()
+
+		if token == "" {
+			L.Push(lua.LNil)
+			L.Push(lua.LString("no token available - select an SPN or pass SPN name"))
+			return 2
+		}
+		L.Push(lua.LString(token))
+		return 1
+	}
+
+	// Look up the SPN by name in config
 	stateMutex.RLock()
-	token := lastToken
+	cfg := appConfig
 	stateMutex.RUnlock()
 
-	if token == "" {
+	if cfg == nil {
 		L.Push(lua.LNil)
-		L.Push(lua.LString("no token available"))
+		L.Push(lua.LString("no configuration loaded"))
 		return 2
 	}
-	L.Push(lua.LString(token))
+
+	// Find SPN entry by name (case-insensitive partial match)
+	var spnValue string
+	spnNameLower := strings.ToLower(spnName)
+	for _, entry := range cfg.SPNs {
+		if strings.ToLower(entry.Name) == spnNameLower ||
+			strings.Contains(strings.ToLower(entry.Name), spnNameLower) {
+			spnValue = entry.SPN
+			break
+		}
+	}
+
+	if spnValue == "" {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("SPN not found: " + spnName))
+		return 2
+	}
+
+	// Check cache first
+	if cachedToken, found := GetCache().GetToken(spnValue); found {
+		L.Push(lua.LString(cachedToken))
+		return 1
+	}
+
+	// Request a new token for this SPN
+	token, err := getServiceTicket(spnValue)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("failed to get token: " + err.Error()))
+		return 2
+	}
+
+	// Encode and cache the token
+	encodedToken := base64.StdEncoding.EncodeToString(token)
+	GetCache().SetToken(spnValue, encodedToken, DefaultTokenExpiration)
+	updateCacheMenu()
+
+	L.Push(lua.LString(encodedToken))
 	return 1
 }
 
@@ -757,4 +824,42 @@ func luaToGoValue(L *lua.LState, lv lua.LValue) interface{} {
 	default:
 		return lv.String()
 	}
+}
+
+// User input functions
+
+// luaPrompt shows a dialog asking for text input: ktray.prompt(title, message, default) -> value, ok
+// Returns the entered text and true if OK was clicked, or empty string and false if cancelled
+func luaPrompt(L *lua.LState) int {
+	title := L.CheckString(1)
+	message := L.OptString(2, "")
+	defaultValue := L.OptString(3, "")
+
+	value, ok := PromptForInput(title, message, defaultValue, false)
+	L.Push(lua.LString(value))
+	L.Push(lua.LBool(ok))
+	return 2
+}
+
+// luaPromptSecret shows a dialog asking for secret input (masked): ktray.prompt_secret(title, message) -> value, ok
+// Input is masked with bullets/dots. Returns the entered text and true if OK was clicked.
+func luaPromptSecret(L *lua.LState) int {
+	title := L.CheckString(1)
+	message := L.OptString(2, "")
+
+	value, ok := PromptForInput(title, message, "", true)
+	L.Push(lua.LString(value))
+	L.Push(lua.LBool(ok))
+	return 2
+}
+
+// luaConfirm shows a Yes/No confirmation dialog: ktray.confirm(title, message) -> bool
+// Returns true if Yes was clicked, false otherwise
+func luaConfirm(L *lua.LState) int {
+	title := L.CheckString(1)
+	message := L.OptString(2, "")
+
+	result := ConfirmDialog(title, message)
+	L.Push(lua.LBool(result))
+	return 1
 }

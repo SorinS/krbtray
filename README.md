@@ -333,17 +333,56 @@ local response, err = ktray.http_post(
 #### Kerberos Functions
 
 ```lua
--- Get the current Kerberos token (base64 encoded)
+-- Get a Kerberos token by SPN name
+-- Parameters: spn_name (string, optional) - name from config to look up
 -- Returns: token (string) on success, or nil and error message if no token
-local token, err = ktray.get_token()
+--
+-- When spn_name is provided:
+--   1. Looks up the SPN by name in config (case-insensitive partial match)
+--   2. Checks cache for existing token
+--   3. Requests new token if not cached
+--   4. Returns the token
+--
+-- When spn_name is omitted:
+--   Returns the currently cached token (if any)
+
+-- Get token for a specific SPN by name
+local token, err = ktray.get_token("BAM")
 if not token then
-    ktray.set_status("No Kerberos token: " .. (err or "unknown"))
+    ktray.set_status("Failed to get BAM token: " .. (err or "unknown"))
     return
 end
+
+-- Get the currently cached token (no SPN lookup)
+local current_token, err = ktray.get_token()
 
 -- Get the current SPN
 -- Returns: spn (string), may be empty if not set
 local spn = ktray.get_spn()
+```
+
+**SPN Name Matching:**
+
+The `spn_name` parameter uses case-insensitive matching against the `name` field in your config's `spns` array:
+- Exact match is tried first (case-insensitive)
+- Partial match (contains) is used as fallback
+
+Example config:
+```json
+{
+  "spns": [
+    {"name": "BAM Production", "spn": "HTTP/bam.example.com@REALM"},
+    {"name": "API Gateway", "spn": "HTTP/api.example.com@REALM"}
+  ]
+}
+```
+
+```lua
+-- All of these would match "BAM Production":
+ktray.get_token("BAM Production")  -- exact match
+ktray.get_token("bam production")  -- case-insensitive
+ktray.get_token("BAM")             -- partial match
+ktray.get_token("bam")             -- partial, case-insensitive
 ```
 
 #### Shell Execution Functions
@@ -580,6 +619,96 @@ local status = ktray.jq('{"count": 5}', 'if .count > 3 then "many" else "few" en
 | `type` | Get value type | `type` → `"object"` |
 | `@base64` | Base64 encode | `.token \| @base64` |
 | `@uri` | URL encode | `.query \| @uri` |
+
+#### User Input Functions
+
+These functions display native dialog boxes to prompt the user for input at runtime.
+
+```lua
+-- Prompt for text input
+-- Parameters: title (string), message (string, optional), default (string, optional)
+-- Returns: value (string), ok (boolean)
+local pin, ok = ktray.prompt("RSA Token", "Please enter your RSA PIN:")
+if ok then
+    ktray.log("User entered: " .. pin)
+else
+    ktray.log("User cancelled")
+    return
+end
+
+-- With default value
+local username, ok = ktray.prompt("Username", "Enter your username:", "admin")
+
+-- Prompt for secret input (masked with bullets)
+-- Parameters: title (string), message (string, optional)
+-- Returns: value (string), ok (boolean)
+local password, ok = ktray.prompt_secret("Authentication", "Enter your password:")
+if not ok then
+    ktray.set_status("Cancelled")
+    return
+end
+
+-- Yes/No confirmation dialog
+-- Parameters: title (string), message (string, optional)
+-- Returns: boolean (true if Yes clicked)
+local confirmed = ktray.confirm("Delete Item", "Are you sure you want to delete this item?")
+if confirmed then
+    ktray.log("User confirmed deletion")
+end
+```
+
+**Platform Support:**
+
+| Platform | Implementation |
+|----------|----------------|
+| macOS | Native NSAlert with text field |
+| Linux | zenity or kdialog (install separately) |
+| Windows | Not yet implemented |
+
+**Practical Example - RSA Token Authentication:**
+
+```lua
+-- rsa_auth.lua
+-- Combine Kerberos token with RSA PIN for authentication
+
+ktray.set_status("Getting Kerberos token...")
+
+local krb_token, err = ktray.get_token()
+if not krb_token then
+    ktray.set_status("No Kerberos token - please select an SPN first")
+    return
+end
+
+-- Prompt for RSA PIN
+local pin, ok = ktray.prompt_secret("RSA Authentication", "Please enter your RSA PIN:")
+if not ok then
+    ktray.set_status("Authentication cancelled")
+    return
+end
+
+-- Combine tokens and make API call
+local headers = {
+    ["Authorization"] = "Negotiate " .. krb_token,
+    ["X-RSA-Token"] = pin
+}
+
+ktray.set_status("Authenticating...")
+local response, err = ktray.http_post(ctx.url, "{}", headers)
+if err then
+    ktray.set_status("Auth failed: " .. err)
+    return
+end
+
+-- Extract session token from response
+local session = ktray.jq(response, '.session_token')
+if session then
+    ktray.cache_set("session", session, 3600)  -- Cache for 1 hour
+    ktray.set_status("Authenticated successfully")
+    result = session  -- Copy to clipboard
+else
+    ktray.set_status("No session token in response")
+end
+```
 
 **Practical Example - API Response Processing:**
 

@@ -399,11 +399,10 @@ func executeURLEntry(entry URLEntry) {
 				"index": fmt.Sprintf("%d", entry.Index),
 			}
 			_, err := engine.RunScript(entry.Script, ctx)
+			LogScriptExecuted(entry.Script, "url", err)
 			if err != nil {
-				LogScriptExecuted(entry.Script, "url", false)
 				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
 			} else {
-				LogScriptExecuted(entry.Script, "url", true)
 				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
 			}
 			return
@@ -491,11 +490,10 @@ func executeSnippetEntry(entry SnippetEntry) {
 				"index": fmt.Sprintf("%d", entry.Index),
 			}
 			result, err := engine.RunScript(entry.Script, ctx)
+			LogScriptExecuted(entry.Script, "snippet", err)
 			if err != nil {
-				LogScriptExecuted(entry.Script, "snippet", false)
 				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
 			} else if result != "" {
-				LogScriptExecuted(entry.Script, "snippet", true)
 				// If script returns a result, copy that to clipboard
 				if err := copyToClipboard(result); err != nil {
 					mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
@@ -504,7 +502,6 @@ func executeSnippetEntry(entry SnippetEntry) {
 					mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
 				}
 			} else {
-				LogScriptExecuted(entry.Script, "snippet", true)
 				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
 			}
 			return
@@ -589,11 +586,10 @@ func executeSSHEntry(entry SSHEntry) {
 				"index":    fmt.Sprintf("%d", entry.Index),
 			}
 			_, err := engine.RunScript(entry.Script, ctx)
+			LogScriptExecuted(entry.Script, "ssh", err)
 			if err != nil {
-				LogScriptExecuted(entry.Script, "ssh", false)
 				mStatus.SetTitle(fmt.Sprintf("Script error: %s", truncateError(err)))
 			} else {
-				LogScriptExecuted(entry.Script, "ssh", true)
 				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
 			}
 			return
