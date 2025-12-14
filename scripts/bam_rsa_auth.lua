@@ -82,13 +82,19 @@ end
 
 ktray.set_status("Submitting RSA code...")
 
--- POST RSA PIN back to same URL (try JSON format)
-local post_body = ktray.json_encode({OATCode = rsa_pin})
+-- Extract hidden fields from the response
+local auth_token = ktray.html_attr(response, "input#authenticationToken", "value") or ""
+local token_required = ktray.html_attr(response, "input#TokenRequired", "value") or "false"
+
+ktray.info("Hidden fields - authenticationToken: " .. string.sub(auth_token, 1, 20) .. "..., TokenRequired: " .. token_required)
+
+-- POST RSA PIN back to same URL (form-urlencoded with hidden fields)
+local post_body = "OATCode=" .. rsa_pin .. "&authenticationToken=" .. auth_token .. "&TokenRequired=" .. token_required
 
 local post_headers = {
     ["Authorization"] = "Negotiate " .. krb_token,
-    ["Content-Type"] = "application/json",
-    ["Accept"] = "application/json, text/html, */*"
+    ["Content-Type"] = "application/x-www-form-urlencoded",
+    ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 }
 
 local rsa_response, err = ktray.http_post(ctx.url, post_body, post_headers, 30, true)
