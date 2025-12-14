@@ -1,4 +1,4 @@
- -- bam_rsa_auth.lua
+-- bam_rsa_auth.lua
 -- BAM authentication with RSA SecurID two-factor authentication
 --
 -- Flow:
@@ -82,13 +82,13 @@ end
 
 ktray.set_status("Submitting RSA code...")
 
--- POST RSA PIN back to same URL
-local post_body = "OATCode=" .. rsa_pin
+-- POST RSA PIN back to same URL (try JSON format)
+local post_body = ktray.json_encode({OATCode = rsa_pin})
 
 local post_headers = {
     ["Authorization"] = "Negotiate " .. krb_token,
-    ["Content-Type"] = "application/x-www-form-urlencoded",
-    ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    ["Content-Type"] = "application/json",
+    ["Accept"] = "application/json, text/html, */*"
 }
 
 local rsa_response, err = ktray.http_post(ctx.url, post_body, post_headers, 30, true)
