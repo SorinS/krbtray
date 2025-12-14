@@ -3,6 +3,7 @@ module krb5tray
 go 1.25.4
 
 require (
+	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/alexbrainman/sspi v0.0.0-20250919150558-7d374ff0d59e
 	github.com/getlantern/systray v1.2.2
 	github.com/itchyny/gojq v0.12.18
@@ -11,12 +12,12 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/yuin/gopher-lua v1.1.1
 	golang.design/x/hotkey v0.4.1
+	golang.org/x/net v0.47.0
 	golang.org/x/sys v0.38.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
-	github.com/PuerkitoBio/goquery v1.11.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/getlantern/context v0.0.0-20190109183933-c447772a6520 // indirect
 	github.com/getlantern/errors v0.0.0-20190325191628-abdb3e3e36f7 // indirect
@@ -34,5 +35,4 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	golang.org/x/crypto v0.44.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
 )

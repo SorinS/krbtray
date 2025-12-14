@@ -119,6 +119,9 @@ func (e *LuaEngine) registerKtrayModule() {
 	e.state.SetGlobal("ktray", ktray)
 }
 
+// Registry key for HTTP session
+const httpSessionKey = "ktray_http_session"
+
 // RunScript executes a Lua script file with optional context variables
 func (e *LuaEngine) RunScript(scriptName string, context map[string]string) (string, error) {
 	scriptPath := ScriptPath(scriptName)
@@ -131,6 +134,18 @@ func (e *LuaEngine) RunScript(scriptName string, context map[string]string) (str
 	// Create a new Lua state for this execution (isolation)
 	L := lua.NewState()
 	defer L.Close()
+
+	// Create HTTP session with cookie jar for this script execution
+	// Using skipVerify=true as default since most scripts need it
+	httpSession, err := NewHTTPSession(true)
+	if err != nil {
+		return "", fmt.Errorf("failed to create HTTP session: %w", err)
+	}
+
+	// Store session in registry so HTTP functions can access it
+	ud := L.NewUserData()
+	ud.Value = httpSession
+	L.SetField(L.Get(lua.RegistryIndex).(*lua.LTable), httpSessionKey, ud)
 
 	// Copy ktray module to new state
 	e.registerKtrayModuleToState(L)
@@ -245,12 +260,28 @@ func luaOpenURL(L *lua.LState) int {
 	return 1
 }
 
+// getHTTPSession retrieves the HTTP session from the Lua state's registry
+func getHTTPSession(L *lua.LState) *HTTPSession {
+	reg := L.Get(lua.RegistryIndex).(*lua.LTable)
+	ud := L.GetField(reg, httpSessionKey)
+	if ud == lua.LNil {
+		return nil
+	}
+	if userData, ok := ud.(*lua.LUserData); ok {
+		if session, ok := userData.Value.(*HTTPSession); ok {
+			return session
+		}
+	}
+	return nil
+}
+
 // luaHTTPGet performs an HTTP GET request: ktray.http_get(url, headers, timeout_seconds, skip_verify) -> body, error
+// Uses the script's HTTP session to maintain cookies across requests
 func luaHTTPGet(L *lua.LState) int {
 	url := L.CheckString(1)
 	headersTable := L.OptTable(2, nil)
-	timeoutSec := L.OptNumber(3, 0)    // 0 means use default
-	skipVerify := L.OptBool(4, false)  // Skip TLS certificate verification
+	timeoutSec := L.OptNumber(3, 0)   // 0 means use default
+	skipVerify := L.OptBool(4, false) // Skip TLS certificate verification (ignored when session exists)
 
 	// Build headers map
 	headers := make(map[string]string)
@@ -262,7 +293,17 @@ func luaHTTPGet(L *lua.LState) int {
 
 	timeout := time.Duration(timeoutSec) * time.Second
 
-	body, err := httpGet(url, headers, timeout, skipVerify)
+	// Try to use the session (with cookie jar) if available
+	var body string
+	var err error
+
+	if session := getHTTPSession(L); session != nil {
+		body, err = session.Get(url, headers, timeout)
+	} else {
+		// Fallback to stateless request (no cookie jar)
+		body, err = httpGet(url, headers, timeout, skipVerify)
+	}
+
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
@@ -273,12 +314,13 @@ func luaHTTPGet(L *lua.LState) int {
 }
 
 // luaHTTPPost performs an HTTP POST request: ktray.http_post(url, body, headers, timeout_seconds, skip_verify) -> response, error
+// Uses the script's HTTP session to maintain cookies across requests
 func luaHTTPPost(L *lua.LState) int {
 	url := L.CheckString(1)
 	body := L.CheckString(2)
 	headersTable := L.OptTable(3, nil)
-	timeoutSec := L.OptNumber(4, 0)    // 0 means use default
-	skipVerify := L.OptBool(5, false)  // Skip TLS certificate verification
+	timeoutSec := L.OptNumber(4, 0)   // 0 means use default
+	skipVerify := L.OptBool(5, false) // Skip TLS certificate verification (ignored when session exists)
 
 	// Build headers map
 	headers := make(map[string]string)
@@ -290,7 +332,17 @@ func luaHTTPPost(L *lua.LState) int {
 
 	timeout := time.Duration(timeoutSec) * time.Second
 
-	response, err := httpPost(url, body, headers, timeout, skipVerify)
+	// Try to use the session (with cookie jar) if available
+	var response string
+	var err error
+
+	if session := getHTTPSession(L); session != nil {
+		response, err = session.Post(url, body, headers, timeout)
+	} else {
+		// Fallback to stateless request (no cookie jar)
+		response, err = httpPost(url, body, headers, timeout, skipVerify)
+	}
+
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
