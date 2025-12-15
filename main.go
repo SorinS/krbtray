@@ -157,7 +157,7 @@ func onReady() {
 	_, urlDesc := getURLHotkeyModifiers()
 	_, sshDesc := getSSHHotkeyModifiers()
 
-	_ = mHotkeys.AddSubMenuItem(fmt.Sprintf("Snippets: %s+[0-9]", snippetDesc), "Copy snippet to clipboard")
+	_ = mHotkeys.AddSubMenuItem(fmt.Sprintf("Snippets: %s+[0-9]", snippetDesc), "Copy and paste snippet")
 	_ = mHotkeys.AddSubMenuItem(fmt.Sprintf("URLs: %s+[0-9]", urlDesc), "Open URL in browser")
 	_ = mHotkeys.AddSubMenuItem(fmt.Sprintf("SSH: %s+[0-9]", sshDesc), "Open SSH connection in terminal")
 	mHotkeys.AddSubMenuItem("", "")
@@ -474,12 +474,14 @@ func handleSnippetClickByIndex(item *systray.MenuItem, index int) {
 		entry := snippetEntries[index]
 		stateMutex.RUnlock()
 		if entry.Name != "" || entry.Script != "" {
-			executeSnippetEntry(entry)
+			executeSnippetEntry(entry, false) // Menu click: copy only, no paste
 		}
 	}
 }
 
-func executeSnippetEntry(entry SnippetEntry) {
+// executeSnippetEntry copies the snippet to clipboard
+// If autoPaste is true, it also simulates Cmd+V/Ctrl+V to paste immediately
+func executeSnippetEntry(entry SnippetEntry, autoPaste bool) {
 	// If script is defined, run it instead of copying value directly
 	if entry.Script != "" {
 		engine := GetLuaEngine()
@@ -499,7 +501,12 @@ func executeSnippetEntry(entry SnippetEntry) {
 					mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
 				} else {
 					LogClipboardCopy("snippet", entry.Name)
-					mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
+					if autoPaste {
+						pasteFromClipboard()
+						mStatus.SetTitle(fmt.Sprintf("Pasted: %s", entry.Name))
+					} else {
+						mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
+					}
 				}
 			} else {
 				mStatus.SetTitle(fmt.Sprintf("Script: %s", entry.Name))
@@ -514,7 +521,12 @@ func executeSnippetEntry(entry SnippetEntry) {
 		mStatus.SetTitle(fmt.Sprintf("Copy failed: %s", entry.Name))
 	} else {
 		LogClipboardCopy("snippet", entry.Name)
-		mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
+		if autoPaste {
+			pasteFromClipboard()
+			mStatus.SetTitle(fmt.Sprintf("Pasted: %s", entry.Name))
+		} else {
+			mStatus.SetTitle(fmt.Sprintf("Copied: %s", entry.Name))
+		}
 	}
 }
 

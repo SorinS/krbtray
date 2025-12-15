@@ -160,7 +160,7 @@ func copySnippetByIndex(num int) {
 
 	for _, snippet := range appConfig.Snippets {
 		if snippet.Index == num {
-			executeSnippetEntry(snippet)
+			executeSnippetEntry(snippet, true) // Hotkey: copy and paste
 			return
 		}
 	}
