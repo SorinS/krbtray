@@ -26,6 +26,7 @@ all: darwin-arm64 windows-amd64
 
 darwin-arm64:
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o=$(BUILD_DIR)/$(BINARY_NAME).darwin-arm64.bin 
+	codesign -s "SorinS_Signing" bin/krb5tray.darwin-arm64.bin
 
 darwin-amd64:
 	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME).darwin-amd64.bin
@@ -93,4 +94,4 @@ app: darwin-arm64
 	@echo '</dict>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo '</plist>' >> $(APP_BUNDLE)/Contents/Info.plist
 	@echo "Created $(APP_BUNDLE)"
-
+	codesign -s "SorinS_Signing" -f --deep $(APP_BUNDLE)

@@ -23,7 +23,7 @@ var (
 	sshInput   string      // Accumulated digit input for SSH
 	sshTimeout *time.Timer // Timeout for multi-digit SSH input
 
-	inputTimeout = 1 * time.Second
+	inputTimeout = 100 * time.Millisecond // Reduced for faster response
 )
 
 // InitHotkeys initializes global hotkey support

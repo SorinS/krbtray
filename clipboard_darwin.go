@@ -18,8 +18,8 @@ void copyToClipboardNative(const char *text) {
     [pasteboard setString:str forType:NSPasteboardTypeString];
 }
 
-// doPaste performs the actual paste - must be called from main thread
-void doPaste(void) {
+// simulatePaste simulates Cmd+V keystroke to paste from clipboard
+void simulatePaste(void) {
     CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
     if (source == NULL) return;
 
@@ -46,18 +46,6 @@ void doPaste(void) {
     CFRelease(cmdUp);
 
     CFRelease(source);
-}
-
-// simulatePaste simulates Cmd+V keystroke to paste from clipboard
-void simulatePaste(void) {
-    // Run on main thread with minimal delay
-    if ([NSThread isMainThread]) {
-        doPaste();
-    } else {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            doPaste();
-        });
-    }
 }
 */
 import "C"
