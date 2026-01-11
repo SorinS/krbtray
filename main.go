@@ -111,8 +111,8 @@ func onReady() {
 	mSPNMenu = systray.AddMenuItem("Select SPN", "Choose a service principal")
 	loadAndBuildSPNMenu()
 
-	// CSM Secrets submenu
-	mSecretsMenu = systray.AddMenuItem("CSM Secrets", "Manage CSM secrets")
+	// Secrets submenu
+	mSecretsMenu = systray.AddMenuItem("Secrets", "Manage secrets")
 	loadAndBuildSecretsMenu()
 
 	// URLs submenu
@@ -166,7 +166,7 @@ func onReady() {
 	systray.AddSeparator()
 
 	// About submenu with version info (kept enabled for better contrast)
-	mAbout = systray.AddMenuItem("About", "About krb5tray")
+	mAbout = systray.AddMenuItem("About", "About ktray")
 	_ = mAbout.AddSubMenuItem(fmt.Sprintf("Version: %s", Version), "")
 	_ = mAbout.AddSubMenuItem(fmt.Sprintf("Commit: %s", getShortCommit()), "")
 	_ = mAbout.AddSubMenuItem(fmt.Sprintf("Build: %s", buildDate), "")

@@ -23,7 +23,7 @@ var (
 	sshInput   string      // Accumulated digit input for SSH
 	sshTimeout *time.Timer // Timeout for multi-digit SSH input
 
-	inputTimeout = 100 * time.Millisecond // Reduced for faster response
+	inputTimeout = 400 * time.Millisecond // Reduced for faster response
 )
 
 // InitHotkeys initializes global hotkey support
@@ -113,14 +113,24 @@ func initHotkeysAsync() {
 // handleSnippetDigit handles Cmd+Option+N presses and accumulates digits
 func handleSnippetDigit(num int) {
 	stateMutex.Lock()
+	wasEmpty := snippetInput == ""
 	snippetInput += fmt.Sprintf("%d", num)
 	currentInput := snippetInput
 	stateMutex.Unlock()
 
+	// If this is the first digit and no multi-digit snippets exist, execute immediately
+	if wasEmpty && !hasMultiDigitSnippets() {
+		stateMutex.Lock()
+		snippetInput = "" // Reset immediately
+		stateMutex.Unlock()
+		selectSnippetByInput(currentInput)
+		return
+	}
+
 	// Update status to show current input
 	mStatus.SetTitle(fmt.Sprintf("Snippet #%s...", currentInput))
 
-	// Reset/start timeout - after 1 second of no more digits, select the snippet
+	// Reset/start timeout - after timeout, select the snippet
 	if snippetTimeout != nil {
 		snippetTimeout.Stop()
 	}
@@ -282,6 +292,19 @@ func openSSHByIndex(num int) {
 	}
 
 	mStatus.SetTitle(fmt.Sprintf("No SSH with index %d", num))
+}
+
+// hasMultiDigitSnippets checks if any snippets have index >= 10
+func hasMultiDigitSnippets() bool {
+	if appConfig == nil {
+		return false
+	}
+	for _, snippet := range appConfig.Snippets {
+		if snippet.Index >= 10 {
+			return true
+		}
+	}
+	return false
 }
 
 // CleanupHotkeys unregisters all hotkeys

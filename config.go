@@ -114,7 +114,7 @@ type SSHEntry struct {
 	Script   string `json:"script,omitempty"` // Optional Lua script to run before/instead of SSH
 }
 
-// SecretEntry represents a CSM secret configuration
+// SecretEntry represents a secret configuration
 type SecretEntry struct {
 	Name      string `json:"name"`       // Display name in menu
 	AuthURL   string `json:"auth_url"`   // Authentication URL
